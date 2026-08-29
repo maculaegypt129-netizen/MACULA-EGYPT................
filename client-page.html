@@ -1,0 +1,1248 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Macula — لوحة تقارير العميل</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;900&family=Cairo:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+  :root{
+    --m-purple:#8263CC;
+    --m-pink:#F159B3;
+    --fb:#4C7EF3;
+    --ig1:#F0577A;--ig2:#B14FE8;--ig3:#F5A24C;
+    --tiktok:#3FD8D0;
+    --yt:#F0475A;
+    --good:#3FCB8C;
+  }
+  html[data-theme="dark"]{
+    --ink:#000000;
+    --charcoal:#111114;
+    --surface:#17171B;
+    --graphite:#2A2A32;
+    --graphite-soft:#1E1E23;
+    --accent:#F159B3;
+    --accent-soft:rgba(241,89,179,.14);
+    --text:#F2F1F5;
+    --muted:#9A97A6;
+    --muted-2:#5C596A;
+    --glow-op:.16;
+  }
+  html[data-theme="light"]{
+    --ink:#F6F5FA;
+    --charcoal:#FFFFFF;
+    --surface:#FFFFFF;
+    --graphite:#E4E1EC;
+    --graphite-soft:#EDEBF3;
+    --accent:#B14FA8;
+    --accent-soft:rgba(177,79,168,.10);
+    --text:#211F29;
+    --muted:#6F6C7C;
+    --muted-2:#A3A0AF;
+    --glow-op:.08;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html,body{background:var(--ink); color:var(--text); font-family:'Cairo',sans-serif; min-height:100vh;}
+  body{
+    background:
+      radial-gradient(circle at 82% -10%, rgba(130,99,204,var(--glow-op)), transparent 45%),
+      radial-gradient(circle at -10% 30%, rgba(241,89,179,var(--glow-op)), transparent 40%),
+      var(--ink);
+    overflow-x:hidden;
+    transition:background-color .35s ease, color .35s ease;
+  }
+  .mono{font-family:'IBM Plex Mono',monospace; direction:ltr; unicode-bidi:plaintext;}
+  button{font-family:'Cairo'; cursor:pointer;}
+
+  @keyframes fadeInUp{ from{opacity:0; transform:translateY(14px);} to{opacity:1; transform:translateY(0);} }
+  @keyframes slideInRight{ from{opacity:0; transform:translateX(20px);} to{opacity:1; transform:translateX(0);} }
+  @keyframes pulseVal{ 0%{transform:scale(1); color:var(--accent);} 50%{transform:scale(1.12); color:var(--accent);} 100%{transform:scale(1); color:var(--text);} }
+  @keyframes spin{ from{transform:rotate(0deg);} to{transform:rotate(360deg);} }
+  .pulse{ animation:pulseVal .5s ease; display:inline-block; }
+  .spin-loader{animation:spin 1s linear infinite;}
+
+  /* ===== Top bar ===== */
+  .topbar{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:20px 32px; border-bottom:1px solid var(--graphite-soft);
+    transition:border-color .35s ease;
+  }
+  .brand{display:flex; align-items:center; gap:12px;}
+  .brand-mark{
+    width:36px; height:36px; border-radius:50%;
+    background: conic-gradient(from 200deg, var(--m-purple), var(--m-pink), var(--m-purple));
+    box-shadow:0 0 20px rgba(241,89,179,.35);
+    position:relative; display:flex; align-items:center; justify-content:center;
+  }
+  .brand-mark::after{ content:""; position:absolute; inset:3px; border-radius:50%; background:var(--ink); transition:background-color .35s ease;}
+  .brand-mark svg{position:relative; z-index:1; width:16px; height:16px;}
+  .brand-name{font-family:'Tajawal',sans-serif; font-weight:900; font-size:20px; letter-spacing:.3px;}
+  .brand-tag{font-size:11px; color:var(--muted-2); letter-spacing:.5px; margin-top:-2px;}
+
+  .topbar-controls{display:flex; align-items:center; gap:18px;}
+  .status-indicator{
+    display:flex; align-items:center; gap:8px; font-size:13px; color:var(--muted);
+    padding:8px 12px; border-radius:8px; background:var(--graphite-soft);
+  }
+  .status-dot{width:8px; height:8px; border-radius:50%; background:var(--good);}
+  .status-dot.offline{background:#E86A6A;}
+
+  /* ===== LOADING VIEW ===== */
+  #loading-view{
+    min-height:100vh;
+    display:flex; align-items:center; justify-content:center;
+    flex-direction:column; gap:20px;
+  }
+  .loading-spinner{
+    width:48px; height:48px; border:3px solid var(--graphite);
+    border-top-color:var(--accent); border-radius:50%;
+    animation:spin 1s linear infinite;
+  }
+  .loading-text{color:var(--muted); font-size:14px;}
+
+  /* ===== NO CLIENT VIEW ===== */
+  #no-client-view{
+    min-height:100vh;
+    display:flex; align-items:center; justify-content:center;
+    padding:40px 20px;
+  }
+  .error-card{
+    width:100%; max-width:500px;
+    background:var(--surface); border:1px solid var(--graphite); border-radius:20px;
+    padding:40px 34px; text-align:center;
+  }
+  .error-icon{font-size:48px; margin-bottom:16px;}
+  .error-title{font-family:'Tajawal'; font-weight:900; font-size:22px; margin-bottom:8px;}
+  .error-text{color:var(--muted); font-size:13.5px; line-height:1.8; margin-bottom:24px;}
+  .error-code{
+    background:var(--charcoal); border:1px solid var(--graphite);
+    padding:12px 16px; border-radius:8px; font-family:'IBM Plex Mono';
+    font-size:11px; color:var(--muted-2); word-break:break-all;
+  }
+
+  /* ===== DASHBOARD VIEW ===== */
+  #dashboard-view{display:none; padding:32px; max-width:1280px; margin:0 auto;}
+  .dash-head{margin-bottom:26px; animation:fadeInUp .5s ease both;}
+  .dash-title-row{display:flex; align-items:center; gap:14px; margin-bottom:4px;}
+  .dash-eyebrow{color:var(--accent); font-size:12px; font-weight:600; letter-spacing:.5px; margin-bottom:6px;}
+  .dash-title{font-family:'Tajawal'; font-weight:900; font-size:28px;}
+  .dash-sub{color:var(--muted); font-size:13.5px; margin-top:6px;}
+  .avatar{
+    width:48px; height:48px; border-radius:50%; overflow:hidden;
+    display:flex; align-items:center; justify-content:center;
+    font-family:'Tajawal'; font-weight:700; font-size:16px; color:#fff;
+    background:linear-gradient(135deg, var(--m-pink), var(--m-purple));
+    flex-shrink:0; border:2px solid rgba(255,255,255,.15);
+  }
+
+  .month-archive{
+    display:flex; align-items:center; gap:12px; margin-top:18px; flex-wrap:wrap;
+    background:var(--surface); border:1px solid var(--graphite); border-radius:12px;
+    padding:10px 16px; width:fit-content; transition:background-color .35s ease, border-color .35s ease;
+  }
+  .month-archive-label{font-size:12.5px; color:var(--muted); white-space:nowrap;}
+  #month-select{
+    background:var(--charcoal); border:1px solid var(--graphite); color:var(--text);
+    padding:8px 12px; border-radius:8px; font-family:'Cairo'; font-size:13px; cursor:pointer; outline:none;
+  }
+  #month-select:focus{border-color:var(--accent);}
+
+  .btn{
+    border:none; border-radius:8px; padding:9px 15px; font-weight:700;
+    font-family:'Tajawal'; font-size:12.5px; cursor:pointer; transition:transform .15s, filter .15s;
+    display:inline-flex; align-items:center; gap:6px;
+  }
+  .btn:active{transform:scale(.96);}
+  .btn:disabled{opacity:.55; cursor:not-allowed;}
+  .btn-download{background:linear-gradient(90deg,var(--m-pink),var(--m-purple)); color:#fff;}
+  .btn-download:hover{filter:brightness(1.08);}
+
+  /* ===== زرار التحميل على شكل سهم — آخر عنصر في الصفحة ===== */
+  .download-arrow-wrap{
+    display:flex; flex-direction:column; align-items:center; gap:10px;
+    margin:46px 0 10px; animation:fadeInUp .5s ease both;
+  }
+  .btn-arrow-download{
+    width:58px; height:58px; border-radius:50%; border:none; cursor:pointer;
+    display:flex; align-items:center; justify-content:center; color:#fff;
+    background:linear-gradient(135deg, var(--m-pink), var(--m-purple));
+    box-shadow:0 10px 26px -8px rgba(241,89,179,.55);
+    transition:transform .15s, filter .15s;
+  }
+  .btn-arrow-download:hover{filter:brightness(1.1); transform:translateY(2px);}
+  .btn-arrow-download:active{transform:scale(.94) translateY(2px);}
+  .btn-arrow-download:disabled{opacity:.55; cursor:not-allowed; transform:none;}
+  .download-arrow-label{font-size:12.5px; color:var(--muted); font-weight:600;}
+
+  .platform-tabs{display:flex; gap:8px; margin:26px 0 22px; flex-wrap:wrap; animation:fadeInUp .55s ease both;}
+  .tab{
+    display:flex; align-items:center; gap:8px;
+    padding:9px 16px; border-radius:999px; border:1px solid var(--graphite);
+    background:var(--surface); font-size:13px; color:var(--muted); cursor:pointer;
+    transition:border-color .2s, background-color .2s, color .2s, transform .15s;
+  }
+  .tab:hover{transform:translateY(-1px);}
+  .tab.active{border-color:var(--accent); color:var(--text); background:var(--accent-soft);}
+
+  .cards-grid{display:grid; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); gap:18px; animation:fadeInUp .6s ease both;}
+  .card{
+    background:var(--surface); border:1px solid var(--graphite); border-radius:16px;
+    padding:24px; transition:border-color .2s, transform .15s, background-color .35s ease;
+  }
+  .card:hover{border-color:var(--accent); transform:translateY(-2px);}
+  .card.new{animation:slideInRight .5s ease both;}
+  .card-eyebrow{font-size:11.5px; color:var(--muted-2); letter-spacing:.5px; margin-bottom:8px; display:flex; align-items:center; gap:6px;}
+  .card-eyebrow .spinner{width:12px; height:12px; border:2px solid var(--graphite); border-top-color:var(--accent); border-radius:50%; animation:spin .6s linear infinite;}
+  .card-title{font-family:'Tajawal'; font-weight:700; font-size:14px; color:var(--text); margin-bottom:6px;}
+  .card-value{font-family:'IBM Plex Mono'; font-size:28px; font-weight:600; color:var(--accent); margin-bottom:12px;}
+  .card-change{font-size:12px; color:var(--muted);}
+  .card-change.up{color:var(--good);}
+
+  .section{margin-top:34px;}
+  .section-title{font-family:'Tajawal'; font-weight:800; font-size:16px; margin-bottom:16px; display:flex; align-items:center; gap:10px;}
+  .section-title-icon{font-size:20px;}
+
+  .chart-placeholder{
+    background:var(--surface); border:1px solid var(--graphite); border-radius:16px;
+    padding:40px 24px; text-align:center; color:var(--muted);
+  }
+
+  .content-grid{display:grid; grid-template-columns:repeat(auto-fill, minmax(200px, 1fr)); gap:16px;}
+  .content-card{
+    background:var(--surface); border:1px solid var(--graphite); border-radius:14px;
+    overflow:hidden; transition:border-color .2s, transform .15s;
+    animation:fadeInUp .5s ease both;
+  }
+  .content-card:hover{border-color:var(--accent); transform:translateY(-2px);}
+  .content-thumb{
+    width:100%; aspect-ratio:1; background:var(--graphite-soft);
+    display:flex; align-items:center; justify-content:center; overflow:hidden; position:relative;
+    cursor:zoom-in;
+  }
+  .content-thumb img, .content-thumb video{width:100%; height:100%; object-fit:cover;}
+  .content-new{
+    position:absolute; top:8px; right:8px;
+    background:var(--accent); color:#fff; font-size:10px; font-weight:700;
+    padding:4px 8px; border-radius:6px; animation:slideInRight .3s ease;
+  }
+  .content-play{
+    position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+    font-size:26px; color:#fff; background:rgba(0,0,0,.28); pointer-events:none;
+  }
+  .content-meta{padding:12px;}
+  .content-platform{
+    display:inline-block; font-size:10px; font-weight:700; padding:3px 8px;
+    border-radius:6px; margin-bottom:6px; color:#fff; background:var(--fb);
+  }
+  .content-platform.ig{background:linear-gradient(135deg, var(--ig1), var(--ig2)); }
+  .content-platform.tiktok{background:var(--tiktok); color:#000;}
+  .content-platform.yt{background:var(--yt);}
+  .content-caption{font-size:12px; color:var(--muted); line-height:1.5; overflow:hidden; text-overflow:ellipsis; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;}
+
+  .pulse-dot{
+    display:inline-block; width:8px; height:8px; border-radius:50%;
+    background:var(--good); animation:pulse .8s ease-in-out infinite;
+  }
+
+  /* ===== FULL 3D PLATFORM REPORT ===== */
+  .report3d-wrap{ perspective:1400px; }
+  .platform-block{
+    background:var(--surface); border:1px solid var(--graphite); border-radius:18px;
+    padding:22px; margin-bottom:20px; position:relative; overflow:hidden;
+    transform-style:preserve-3d; transition:transform .12s ease-out, box-shadow .2s ease-out;
+    box-shadow:0 14px 34px -16px rgba(0,0,0,.55);
+    animation:fadeInUp .5s ease both;
+    will-change:transform;
+  }
+  .platform-block::before{
+    content:""; position:absolute; inset:0; border-radius:18px; pointer-events:none;
+    background:linear-gradient(140deg, color-mix(in srgb, var(--pf-color, var(--accent)) 22%, transparent), transparent 55%);
+    opacity:.8;
+  }
+  .platform-block::after{
+    content:""; position:absolute; inset:0 0 auto 0; height:3px; border-radius:18px 18px 0 0;
+    background:var(--pf-color, var(--accent));
+  }
+  .platform-block-head{ display:flex; align-items:center; gap:10px; margin-bottom:18px; position:relative; transform:translateZ(28px); }
+  .platform-block-icon{
+    width:34px; height:34px; border-radius:10px; display:flex; align-items:center; justify-content:center;
+    font-size:16px; font-weight:700; background:var(--pf-color, var(--accent)); color:#fff; flex-shrink:0;
+    box-shadow:0 6px 16px -4px var(--pf-color, var(--accent));
+  }
+  .platform-block-title{ font-family:'Tajawal'; font-weight:800; font-size:15.5px; }
+  .platform-block-grid{
+    display:grid; grid-template-columns:repeat(auto-fit, minmax(150px,1fr)); gap:14px;
+    position:relative; transform:translateZ(16px);
+  }
+  .metric-3d{
+    background:linear-gradient(160deg, var(--graphite-soft), var(--charcoal));
+    border:1px solid var(--graphite); border-radius:12px; padding:14px 16px;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.05), 0 8px 16px -10px rgba(0,0,0,.65);
+    transition:transform .15s ease;
+  }
+  .metric-3d-label{ font-size:11.5px; color:var(--muted); margin-bottom:6px; }
+  .metric-3d-value{ font-family:'IBM Plex Mono'; font-size:19px; font-weight:700; color:var(--text); }
+  .platform-block-img{
+    width:100%; border-radius:12px; display:block; margin-bottom:16px;
+    border:1px solid var(--graphite); transform:translateZ(16px); cursor:zoom-in;
+    box-shadow:0 10px 24px -12px rgba(0,0,0,.6);
+  }
+
+  .total-chart-card{
+    background:var(--surface); border:1px solid var(--graphite); border-radius:18px; padding:24px 24px 20px;
+    box-shadow:0 14px 34px -16px rgba(0,0,0,.55);
+    transform-style:preserve-3d; transition:transform .12s ease-out;
+    position:relative; overflow:hidden;
+  }
+  .total-chart-card::after{
+    content:""; position:absolute; inset:0 0 auto 0; height:3px; border-radius:18px 18px 0 0;
+    background:linear-gradient(90deg, var(--m-pink), var(--m-purple));
+  }
+  .total-bar-row{ display:flex; align-items:center; gap:12px; margin-bottom:14px; }
+  .total-bar-label{ width:130px; font-size:12.5px; color:var(--muted); flex-shrink:0; }
+  .total-bar-track{
+    flex:1; background:var(--charcoal); border-radius:8px; height:22px; overflow:hidden;
+    position:relative; box-shadow:inset 0 2px 6px rgba(0,0,0,.5);
+  }
+  .total-bar-fill{
+    height:100%; border-radius:8px; transition:width 1s cubic-bezier(.2,.9,.3,1);
+    box-shadow:0 0 14px rgba(241,89,179,.45);
+  }
+  .total-bar-value{ width:70px; text-align:left; font-family:'IBM Plex Mono'; font-size:12px; color:var(--text); flex-shrink:0; }
+
+  /* ===== LIGHTBOX ===== */
+  .lightbox-overlay{
+    position:fixed; inset:0; background:rgba(0,0,0,.9); z-index:3000;
+    display:none; align-items:center; justify-content:center; padding:24px; cursor:zoom-out;
+  }
+  .lightbox-overlay.active{display:flex;}
+  .lightbox-content{max-width:92vw; max-height:88vh; border-radius:10px; cursor:default; display:block;}
+  .lightbox-close{
+    position:absolute; top:18px; left:18px; width:40px; height:40px; border-radius:50%;
+    background:rgba(255,255,255,.12); border:none; color:#fff; font-size:18px; cursor:pointer;
+  }
+  .lightbox-close:hover{background:rgba(255,255,255,.22);}
+
+  @media(max-width:768px){
+    .platform-block-grid{ grid-template-columns:repeat(auto-fit, minmax(120px,1fr)); }
+    .total-bar-label{ width:90px; font-size:11px; }
+  }
+
+  @media(max-width:768px){
+    .topbar{padding:16px 20px;}
+    #dashboard-view{padding:20px;}
+    .cards-grid{grid-template-columns:1fr;}
+    .dash-title{font-size:22px;}
+  }
+
+  @media(max-width:420px){
+    .topbar{padding:12px 14px;}
+    .brand-name{font-size:17px;}
+    .brand-tag{font-size:10px;}
+    .status-indicator{font-size:11.5px; padding:6px 9px;}
+    #dashboard-view{padding:14px;}
+    .dash-title{font-size:19px;}
+    .month-archive{width:100%; padding:9px 12px;}
+    #month-select{max-width:100%;}
+    .platform-block{padding:16px;}
+    .total-bar-label{width:70px; font-size:10.5px;}
+    .btn-arrow-download{width:50px; height:50px;}
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand">
+    <div class="brand-mark">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="12" r="10"></circle>
+        <path d="M12 6v6l4 2"></path>
+      </svg>
+    </div>
+    <div>
+      <div class="brand-name">Macula</div>
+      <div class="brand-tag">تقارير العميل</div>
+    </div>
+  </div>
+
+  <div class="topbar-controls">
+    <div class="status-indicator">
+      <div class="status-dot" id="status-dot"></div>
+      <span id="status-text">اتصال حي</span>
+    </div>
+  </div>
+</div>
+
+<!-- LOADING -->
+<div id="loading-view">
+  <div class="loading-spinner"></div>
+  <div class="loading-text">جاري تحميل البيانات...</div>
+</div>
+
+<!-- NO CLIENT ERROR -->
+<div id="no-client-view" style="display:none;">
+  <div class="error-card">
+    <div class="error-icon">⚠️</div>
+    <div class="error-title">معرّف العميل غير صحيح</div>
+    <div class="error-text">
+      لم نتمكن من العثور على معرّف العميل. تأكد من أن الرابط صحيح.
+      <br><br>
+      يجب أن يكون الرابط بهذا الشكل:
+    </div>
+    <div class="error-code" id="example-url">...جاري التحميل</div>
+  </div>
+</div>
+
+<!-- DASHBOARD -->
+<div id="dashboard-view">
+  <div class="dash-head">
+    <div class="dash-eyebrow">👋 مرحباً بك</div>
+    <div class="dash-title-row">
+      <div class="avatar" id="dash-avatar">ع</div>
+      <div>
+        <div class="dash-title" id="dash-title">لوحة التقارير الخاصة بك</div>
+        <div class="dash-sub" id="dash-sub">معرّف العميل: <span class="mono" id="client-id-display">...</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="month-archive">
+    <label class="month-archive-label">الشهر:</label>
+    <select id="month-select">
+      <option>اختر شهراً...</option>
+    </select>
+  </div>
+
+  <!-- PLATFORM TABS: بتتبني ديناميكياً حسب اللي اترفع فعلاً فقط -->
+  <div class="platform-tabs" id="platform-tabs"></div>
+
+  <!-- FULL 3D REPORT: كل منصة في بلوك لوحدها بصورتها المقسّمة وإحصائياتها لو موجودة -->
+  <div class="section" id="full-report-section">
+    <div class="section-title">
+      <span class="section-title-icon">🧩</span>
+      تقرير الأداء التفصيلي
+    </div>
+    <div id="full-report-wrap"></div>
+  </div>
+
+  <!-- CONTENT SECTION -->
+  <div class="section">
+    <div class="section-title">
+      <span class="section-title-icon">📸</span>
+      المنشورات والفيديوهات
+    </div>
+    <div class="content-grid" id="content-grid">
+      <div class="chart-placeholder">جاري التحميل...</div>
+    </div>
+  </div>
+
+  <!-- زرار تحميل التقرير الكامل (PDF) — آخر حاجة في الصفحة -->
+  <div class="download-arrow-wrap" id="download-arrow-wrap" style="display:none;">
+    <button class="btn-arrow-download" id="download-report-btn" onclick="downloadFullReport()" title="تحميل التقرير الكامل PDF">
+      <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 4v13"></path>
+        <path d="M6 12l6 6 6-6"></path>
+      </svg>
+    </button>
+    <div class="download-arrow-label">تحميل التقرير الكامل</div>
+  </div>
+</div>
+
+<!-- LIGHTBOX -->
+<div id="lightbox" class="lightbox-overlay" onclick="if(event.target===this) closeLightbox();">
+  <button class="lightbox-close" onclick="closeLightbox()">✕</button>
+  <img id="lightbox-img" class="lightbox-content" src="" style="display:none;">
+  <video id="lightbox-video" class="lightbox-content" controls style="display:none;"></video>
+</div>
+
+<script>
+  // ===================== STATE (يتم تهيئتها أولاً قبل أي كود قابل للفشل) =====================
+  let clientId = null;
+  let clientName = null;
+  let currentMonth = null;
+  let contentByMonth = {};
+  let platformStatsByMonth = {};
+  let platformReportsByMonth = {};
+  let currentPlatform = 'all';
+  let isConnected = false;
+  let realtimeSubscriptions = [];
+
+  // ===================== PLATFORM METRIC DEFINITIONS =====================
+  // خلي القيم دي زي ما هي في admin-dashboard.html عشان تتوافق
+  const PLATFORM_METRICS = {
+    facebook: [
+      { key:'reach', label:'الوصول' },
+      { key:'followers', label:'المتابعون' },
+      { key:'engagement', label:'التفاعل' },
+      { key:'views', label:'المشاهدات' },
+      { key:'earnings', label:'الأرباح' }
+    ],
+    instagram: [
+      { key:'views', label:'المشاهدات' },
+      { key:'followers', label:'المتابعون' },
+      { key:'reach', label:'الوصول' },
+      { key:'interactions', label:'التفاعل' },
+      { key:'conversions', label:'التحويلات' }
+    ],
+    tiktok: [
+      { key:'video_views', label:'مشاهدات الفيديو' },
+      { key:'profile_views', label:'مشاهدات البروفايل' },
+      { key:'likes', label:'الإعجابات' },
+      { key:'comments', label:'التعليقات' },
+      { key:'earnings', label:'الأرباح التقديرية' }
+    ],
+    youtube: [
+      { key:'views', label:'المشاهدات' },
+      { key:'watch_time', label:'وقت المشاهدة (ساعة)' },
+      { key:'subscribers', label:'المشتركون' }
+    ]
+  };
+  const METRIC_LABELS = {};
+  Object.values(PLATFORM_METRICS).forEach(list => list.forEach(m => { METRIC_LABELS[m.key] = m.label; }));
+
+  // ===================== CONFIG =====================
+  const SUPABASE_URL = 'https://vytljppuhcpnadjdkbmq.supabase.co';
+  const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ5dGxqcHB1aGNwbmFkamRrYm1xIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY3OTEzOTksImV4cCI6MjEwMjM2NzM5OX0.XBhOZH7vl5IUU4rmNrqeUUn0i9l69erZ73uRS5r3WQA';
+
+  let supabaseClient = null;
+  try {
+    if(SUPABASE_URL && SUPABASE_URL !== 'YOUR_SUPABASE_URL' && SUPABASE_KEY && SUPABASE_KEY !== 'YOUR_SUPABASE_ANON_KEY'){
+      supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    }
+  } catch(e){
+    console.error('فشل الاتصال بـ Supabase:', e);
+    supabaseClient = null;
+  }
+
+  // ===================== INIT =====================
+  async function init(){
+    if(!supabaseClient){
+      showNoClient();
+      const box = document.getElementById('no-client-view');
+      if(box) box.innerHTML = '<div style="text-align:center; padding:20px; color:var(--pending);">⚠️ لم يتم ربط قاعدة البيانات بعد. يرجى إبلاغ الإدارة بذلك.</div>';
+      return;
+    }
+
+    // احصل على معرّف العميل من URL
+    const params = new URLSearchParams(window.location.search);
+    clientId = params.get('client_id') || params.get('id');
+
+    const example = `${window.location.origin}${window.location.pathname}?client_id=abc123def456`;
+    document.getElementById('example-url').textContent = example;
+
+    if(!clientId){
+      showNoClient();
+      return;
+    }
+
+    document.getElementById('client-id-display').textContent = clientId;
+
+    // احصل على اسم العميل واعرضه
+    await loadClientName();
+
+    // اتصل بقاعدة البيانات واحصل على البيانات
+    await loadClientData();
+
+    // اشترك في التحديثات الحية (Real-time)
+    subscribeToUpdates();
+
+    showDashboard();
+    updateConnectionStatus(true);
+  }
+
+  // ===================== CLIENT NAME =====================
+  async function loadClientName(){
+    try {
+      const { data, error } = await supabaseClient
+        .from('clients')
+        .select('name')
+        .eq('id', clientId)
+        .single();
+
+      if(error) throw error;
+
+      const name = (data && data.name) ? data.name : clientId;
+      clientName = name;
+      document.getElementById('dash-title').textContent = `تقارير ${name}`;
+      document.getElementById('dash-avatar').textContent = name.charAt(0).toUpperCase();
+    } catch(err) {
+      console.error('تعذر جلب اسم العميل:', err);
+      // اسم افتراضي لو حصل خطأ، من غير ما يوقف الصفحة
+    }
+  }
+
+  // ===================== LOAD DATA =====================
+  async function loadClientData(){
+    document.getElementById('loading-view').style.display = 'flex';
+    document.getElementById('dashboard-view').style.display = 'none';
+
+    try {
+      // احصل على المحتوى (صور وفيديوهات)
+      const { data: content, error: contentError } = await supabaseClient
+        .from('content')
+        .select('*')
+        .eq('client_id', clientId)
+        .order('created_at', { ascending: false });
+
+      if(contentError) throw contentError;
+
+      contentByMonth = {};
+      (content || []).forEach(c => {
+        const month = c.month_key;
+        if(!contentByMonth[month]) contentByMonth[month] = [];
+        contentByMonth[month].push(c);
+      });
+
+      // احصل على إحصائيات كل منصة
+      const { data: stats, error: statsError } = await supabaseClient
+        .from('platform_stats')
+        .select('*')
+        .eq('client_id', clientId);
+
+      if(statsError) throw statsError;
+
+      platformStatsByMonth = {};
+      (stats || []).forEach(s => {
+        if(!platformStatsByMonth[s.month_key]) platformStatsByMonth[s.month_key] = {};
+        platformStatsByMonth[s.month_key][s.platform] = s.stats || {};
+      });
+
+      // احصل على صور تقرير كل منصة (المقسّمة من صورة الأدمن أو المرفوعة يدوياً) — ممكن أكتر من صورة لكل منصة
+      const { data: platformReports, error: reportsError } = await supabaseClient
+        .from('platform_reports')
+        .select('*')
+        .eq('client_id', clientId)
+        .order('sort_order', { ascending: true });
+
+      if(reportsError) throw reportsError;
+
+      platformReportsByMonth = {};
+      (platformReports || []).forEach(r => {
+        if(!platformReportsByMonth[r.month_key]) platformReportsByMonth[r.month_key] = {};
+        if(!platformReportsByMonth[r.month_key][r.platform]) platformReportsByMonth[r.month_key][r.platform] = [];
+        platformReportsByMonth[r.month_key][r.platform].push(r);
+      });
+
+      rebuildMonthOptions();
+
+      const allMonths = new Set([...Object.keys(platformStatsByMonth), ...Object.keys(platformReportsByMonth)]);
+      if(allMonths.size > 0){
+        currentMonth = Array.from(allMonths).sort().reverse()[0];
+        loadMonth(currentMonth, false);
+      }
+
+    } catch(err) {
+      console.error('خطأ في تحميل البيانات:', err);
+      showNoClient();
+    }
+  }
+
+  // ===================== REAL-TIME SUBSCRIPTIONS =====================
+  function subscribeToUpdates(){
+    // اشترك في صور تقارير المنصات الجديدة والمحدثة (الصور المقسّمة أو المرفوعة يدوياً)
+    const reportsSubscription = supabaseClient
+      .channel(`public:platform_reports`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'platform_reports',
+          filter: `client_id=eq.${clientId}`
+        },
+        (payload) => {
+          console.log('تحديث صورة تقرير منصة:', payload);
+          if(payload.eventType === 'INSERT' || payload.eventType === 'UPDATE'){
+            const data = payload.new;
+            if(!platformReportsByMonth[data.month_key]) platformReportsByMonth[data.month_key] = {};
+            if(!platformReportsByMonth[data.month_key][data.platform]) platformReportsByMonth[data.month_key][data.platform] = [];
+            const arr = platformReportsByMonth[data.month_key][data.platform];
+            const idx = arr.findIndex(r => r.id === data.id);
+            if(idx !== -1) arr[idx] = data; else arr.push(data);
+            arr.sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
+            rebuildMonthOptions();
+            if(!currentMonth) currentMonth = data.month_key;
+            loadMonth(currentMonth, true); // pulse للتأكيد على التحديث
+          } else if(payload.eventType === 'DELETE'){
+            const data = payload.old;
+            if(platformReportsByMonth[data.month_key] && platformReportsByMonth[data.month_key][data.platform]){
+              platformReportsByMonth[data.month_key][data.platform] =
+                platformReportsByMonth[data.month_key][data.platform].filter(r => r.id !== data.id);
+              if(platformReportsByMonth[data.month_key][data.platform].length === 0){
+                delete platformReportsByMonth[data.month_key][data.platform];
+              }
+            }
+            rebuildMonthOptions();
+            if(currentMonth) loadMonth(currentMonth, false);
+          }
+        }
+      )
+      .subscribe();
+
+    // اشترك في المحتوى الجديد أو المحذوف أو المستبدل
+    const contentSubscription = supabaseClient
+      .channel(`public:content`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'content',
+          filter: `client_id=eq.${clientId}`
+        },
+        (payload) => {
+          console.log('تحديث محتوى:', payload);
+          if(payload.eventType === 'INSERT'){
+            const data = payload.new;
+            if(!contentByMonth[data.month_key]) contentByMonth[data.month_key] = [];
+            contentByMonth[data.month_key].unshift(data); // أضفه في الأعلى
+          } else if(payload.eventType === 'UPDATE'){
+            const data = payload.new;
+            const list = contentByMonth[data.month_key] || [];
+            const idx = list.findIndex(c => c.id === data.id);
+            if(idx !== -1) list[idx] = data;
+          } else if(payload.eventType === 'DELETE'){
+            const data = payload.old;
+            Object.keys(contentByMonth).forEach(month => {
+              contentByMonth[month] = contentByMonth[month].filter(c => c.id !== data.id);
+            });
+          }
+
+          if(currentMonth){
+            renderContent(currentMonth, currentPlatform);
+            setTimeout(() => {
+              document.querySelectorAll('.content-card.new').forEach(card => {
+                card.classList.remove('new');
+              });
+            }, 500);
+          }
+        }
+      )
+      .subscribe();
+
+    // اشترك في تحديثات إحصائيات المنصات
+    const statsSubscription = supabaseClient
+      .channel(`public:platform_stats`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'platform_stats',
+          filter: `client_id=eq.${clientId}`
+        },
+        (payload) => {
+          if(payload.eventType === 'INSERT' || payload.eventType === 'UPDATE'){
+            const data = payload.new;
+            if(!platformStatsByMonth[data.month_key]) platformStatsByMonth[data.month_key] = {};
+            platformStatsByMonth[data.month_key][data.platform] = data.stats || {};
+            if(currentMonth === data.month_key){
+              loadMonth(currentMonth, true);
+            }
+          }
+        }
+      )
+      .subscribe();
+
+    realtimeSubscriptions.push(reportsSubscription, contentSubscription, statsSubscription);
+  }
+
+  // ===================== RENDER =====================
+  function rebuildMonthOptions(){
+    const select = document.getElementById('month-select');
+    // خد كل الشهور اللي عندها صور تقرير منصات أو إحصائيات (عشان الشهر يظهر حتى لو محصلش النوعين مع بعض)
+    const monthSet = new Set([...Object.keys(platformReportsByMonth), ...Object.keys(platformStatsByMonth)]);
+    const months = Array.from(monthSet).sort().reverse();
+
+    select.innerHTML = '<option value="">اختر شهراً...</option>';
+    months.forEach(month => {
+      const opt = document.createElement('option');
+      opt.value = month;
+      opt.textContent = formatMonth(month);
+      select.appendChild(opt);
+    });
+
+    select.onchange = (e) => {
+      if(e.target.value){
+        currentMonth = e.target.value;
+        loadMonth(currentMonth, false);
+      }
+    };
+  }
+
+  function loadMonth(month, doPulse){
+    currentMonth = month;
+    document.getElementById('month-select').value = month;
+
+    renderPlatformTabs(month);
+    renderFullReport(month, doPulse);
+    renderContent(month, currentPlatform);
+  }
+
+  // ===================== PLATFORM TABS (ديناميكي — بس المنصات اللي فيها محتوى فعلاً لهذا الشهر) =====================
+  const TAB_ICONS = {
+    facebook: `<span style="color:var(--fb); font-size:16px;">f</span>`,
+    instagram: `<span style="font-size:14px;">📷</span>`,
+    tiktok: `<span style="color:var(--tiktok); font-size:14px;">♪</span>`,
+    youtube: `<span style="color:var(--yt); font-size:16px;">▶</span>`
+  };
+
+  function renderPlatformTabs(month){
+    const wrap = document.getElementById('platform-tabs');
+    const monthContent = contentByMonth[month] || [];
+
+    // المنصات اللي فيها منشورات فعلاً لهذا الشهر فقط
+    const availablePlatforms = PLATFORM_ORDER.filter(p => monthContent.some(c => c.platform === p));
+
+    if(availablePlatforms.length === 0){
+      wrap.innerHTML = '';
+      currentPlatform = 'all';
+      return;
+    }
+
+    // لو انقرضت المنصة اللي كانت متفعّلة، رجّع لـ"الكل"
+    if(currentPlatform !== 'all' && !availablePlatforms.includes(currentPlatform)){
+      currentPlatform = 'all';
+    }
+
+    let html = `<div class="tab ${currentPlatform === 'all' ? 'active' : ''}" data-platform="all">الكل</div>`;
+    availablePlatforms.forEach(p => {
+      html += `<div class="tab ${currentPlatform === p ? 'active' : ''}" data-platform="${p}">${TAB_ICONS[p] || ''} ${getPlatformLabel(p)}</div>`;
+    });
+    wrap.innerHTML = html;
+  }
+
+  // ===================== FULL 3D PLATFORM REPORT =====================
+  const PLATFORM_COLORS = { facebook:'#4C7EF3', instagram:'#F0577A', tiktok:'#3FD8D0', youtube:'#F0475A' };
+  const PLATFORM_ICON3D = { facebook:'f', instagram:'📷', tiktok:'♪', youtube:'▶' };
+  const PLATFORM_ORDER = ['facebook', 'instagram', 'tiktok', 'youtube'];
+
+  function renderFullReport(month, doPulse){
+    const wrap = document.getElementById('full-report-wrap');
+    const monthStats = platformStatsByMonth[month] || {};
+    const monthImages = platformReportsByMonth[month] || {};
+
+    // اعرض أي منصة عندها صورة (أو أكتر) مقسّمة أو أرقام إحصائيات، أيهما موجود
+    const platforms = Object.keys(PLATFORM_METRICS).filter(p =>
+      (monthImages[p] && monthImages[p].length) || (monthStats[p] && Object.keys(monthStats[p]).length)
+    );
+
+    // أظهر أو أخفِ زرار تحميل التقرير الكامل حسب وجود صور لهذا الشهر
+    const downloadWrap = document.getElementById('download-arrow-wrap');
+    if(downloadWrap){
+      const hasAnyImage = Object.values(monthImages).some(list => list && list.length);
+      downloadWrap.style.display = hasAnyImage ? 'flex' : 'none';
+    }
+
+    if(platforms.length === 0){
+      wrap.innerHTML = '<div class="chart-placeholder">لا يوجد تقرير مرفوع لهذا الشهر بعد</div>';
+      return;
+    }
+
+    let html = '<div class="report3d-wrap">';
+
+    // بلوك لكل منصة لوحدها: صورها (لو موجودة، ممكن أكتر من صورة) + إحصائياتها (لو موجودة)
+    platforms.forEach(p => {
+      const defs = PLATFORM_METRICS[p] || [];
+      const stats = monthStats[p] || {};
+      const images = monthImages[p] || [];
+      const color = PLATFORM_COLORS[p] || 'var(--accent)';
+      const metricsHtml = defs
+        .filter(d => typeof stats[d.key] === 'number')
+        .map(d => `
+          <div class="metric-3d">
+            <div class="metric-3d-label">${d.label}</div>
+            <div class="metric-3d-value">${formatNumber(stats[d.key])}</div>
+          </div>
+        `).join('');
+
+      const imagesHtml = images.map(img => `
+        <img class="platform-block-img" src="${img.image_url}" alt="${getPlatformLabel(p)}" data-lightbox-url="${img.image_url}" data-lightbox-type="image">
+      `).join('');
+
+      html += `
+        <div class="platform-block" style="--pf-color:${color}">
+          <div class="platform-block-head">
+            <div class="platform-block-icon" style="background:${color}">${PLATFORM_ICON3D[p] || '•'}</div>
+            <div class="platform-block-title">${getPlatformLabel(p)}</div>
+          </div>
+          ${imagesHtml}
+          ${metricsHtml ? `<div class="platform-block-grid">${metricsHtml}</div>` : ''}
+        </div>
+      `;
+    });
+
+    // تجميع الإجمالي عبر كل المنصات (من الأرقام لو اتدخلت)
+    const totals = {};
+    const order = [];
+    platforms.forEach(p => {
+      const s = monthStats[p] || {};
+      Object.keys(s).forEach(k => {
+        if(typeof s[k] === 'number'){
+          if(!(k in totals)){ totals[k] = 0; order.push(k); }
+          totals[k] += s[k];
+        }
+      });
+    });
+
+    if(order.length > 0){
+      const maxVal = Math.max(...order.map(k => totals[k]), 1);
+      html += `
+        <div class="total-chart-card">
+          <div class="platform-block-head" style="margin-bottom:20px;">
+            <div class="platform-block-icon" style="background:linear-gradient(135deg,var(--m-pink),var(--m-purple))">Σ</div>
+            <div class="platform-block-title">الإجمالي على كل المنصات</div>
+          </div>
+          ${order.map(k => `
+            <div class="total-bar-row">
+              <div class="total-bar-label">${METRIC_LABELS[k] || k}</div>
+              <div class="total-bar-track">
+                <div class="total-bar-fill" data-final-width="${(totals[k] / maxVal * 100).toFixed(1)}"
+                  style="width:0%; background:linear-gradient(90deg, var(--m-pink), var(--m-purple));"></div>
+              </div>
+              <div class="total-bar-value mono">${formatNumber(totals[k])}</div>
+            </div>
+          `).join('')}
+        </div>
+      `;
+    }
+
+    html += '</div>';
+    wrap.innerHTML = html;
+
+    // فعّل تأثير الميل الثلاثي الأبعاد مع حركة الماوس على كل بلوك منصة
+    wrap.querySelectorAll('.platform-block').forEach(attachTiltEffect3D);
+
+    // حرّك أعمدة جراف الإجمالي بعد ما تتحط في الصفحة
+    requestAnimationFrame(() => {
+      wrap.querySelectorAll('.total-bar-fill').forEach(el => {
+        el.style.width = el.dataset.finalWidth + '%';
+      });
+    });
+
+    if(doPulse){
+      wrap.querySelectorAll('.platform-block-img').forEach(img => {
+        img.style.transition = 'opacity .3s';
+        img.style.opacity = '0.3';
+        setTimeout(() => { img.style.opacity = '1'; }, 50);
+      });
+    }
+  }
+
+  function attachTiltEffect3D(el){
+    el.addEventListener('mousemove', (e) => {
+      const rect = el.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      const rotateY = ((x / rect.width) - 0.5) * 8;
+      const rotateX = ((y / rect.height) - 0.5) * -8;
+      el.style.transform = `rotateX(${rotateX}deg) rotateY(${rotateY}deg) translateY(-2px)`;
+    });
+    el.addEventListener('mouseleave', () => {
+      el.style.transform = 'rotateX(0deg) rotateY(0deg) translateY(0)';
+    });
+  }
+
+  function renderContent(month, filter){
+    const content = (contentByMonth[month] || []).filter(c =>
+      filter === 'all' || c.platform === filter
+    );
+
+    const grid = document.getElementById('content-grid');
+    if(content.length === 0){
+      grid.innerHTML = '<div class="chart-placeholder">لا توجد منشورات في هذا الشهر</div>';
+      return;
+    }
+
+    grid.innerHTML = content.map(c => {
+      const isVideo = c.media_type === 'video';
+      const thumb = c.thumbnail_url || c.media_url || '';
+      const isNew = isContentNew(c.created_at);
+
+      return `
+        <div class="content-card ${isNew ? 'new' : ''}">
+          <div class="content-thumb" data-lightbox-url="${c.media_url || ''}" data-lightbox-type="${isVideo ? 'video' : 'image'}">
+            ${isVideo
+              ? (c.thumbnail_url ? `<img src="${c.thumbnail_url}" alt="">` : `<video src="${c.media_url}" muted></video>`)
+              : (thumb ? `<img src="${thumb}" alt="">` : '<div style="font-size:40px">📸</div>')}
+            ${isVideo ? '<div class="content-play">▶</div>' : ''}
+            ${isNew ? '<div class="content-new">جديد</div>' : ''}
+          </div>
+          <div class="content-meta">
+            <div class="content-platform ${c.platform}">${getPlatformLabel(c.platform)}</div>
+            <div class="content-caption">${escapeHtml(c.caption || '')}</div>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  // ===================== PLATFORM TABS =====================
+  document.addEventListener('click', (e) => {
+    if(e.target.closest('.tab')){
+      const tab = e.target.closest('.tab');
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+
+      currentPlatform = tab.dataset.platform;
+      if(currentMonth){
+        loadMonth(currentMonth, false);
+      }
+    }
+  });
+
+  // ===================== LIGHTBOX =====================
+  document.addEventListener('click', (e) => {
+    const trigger = e.target.closest('[data-lightbox-url]');
+    if(trigger && trigger.dataset.lightboxUrl){
+      openLightbox(trigger.dataset.lightboxUrl, trigger.dataset.lightboxType || 'image');
+    }
+  });
+
+  function openLightbox(url, type){
+    const imgEl = document.getElementById('lightbox-img');
+    const vidEl = document.getElementById('lightbox-video');
+    if(type === 'video'){
+      imgEl.style.display = 'none';
+      imgEl.src = '';
+      vidEl.style.display = 'block';
+      vidEl.src = url;
+      vidEl.play().catch(() => {});
+    } else {
+      vidEl.pause();
+      vidEl.style.display = 'none';
+      vidEl.src = '';
+      imgEl.style.display = 'block';
+      imgEl.src = url;
+    }
+    document.getElementById('lightbox').classList.add('active');
+  }
+
+  function closeLightbox(){
+    document.getElementById('lightbox').classList.remove('active');
+    const vidEl = document.getElementById('lightbox-video');
+    vidEl.pause();
+    vidEl.src = '';
+  }
+
+  // ===================== DOWNLOAD FULL REPORT (PDF — كل صورة في صفحة منفصلة + لوجو شفاف) =====================
+  function loadImageForCanvas(url){
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error('تعذر تحميل صورة'));
+      img.src = url;
+    });
+  }
+
+  // يرسم لوجو Macula شفاف في نص الصورة (شفافية خفيفة عشان ميبوظش المحتوى)
+  function drawWatermarkLogo(ctx, canvasWidth, canvasHeight){
+    const cx = canvasWidth / 2;
+    const cy = canvasHeight / 2;
+    const size = Math.min(canvasWidth, canvasHeight) * 0.28;
+
+    ctx.save();
+    ctx.globalAlpha = 0.14;
+
+    // الدائرة المتدرجة (نفس هوية الماركة)
+    const grad = ctx.createLinearGradient(cx - size / 2, cy - size / 2, cx + size / 2, cy + size / 2);
+    grad.addColorStop(0, '#8263CC');
+    grad.addColorStop(1, '#F159B3');
+    ctx.beginPath();
+    ctx.arc(cx, cy, size / 2, 0, Math.PI * 2);
+    ctx.fillStyle = grad;
+    ctx.fill();
+
+    // حرف العلامة في النص
+    ctx.globalAlpha = 0.22;
+    ctx.fillStyle = '#ffffff';
+    ctx.font = `700 ${Math.round(size * 0.42)}px Tajawal, Cairo, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('M', cx, cy + size * 0.02);
+
+    ctx.restore();
+  }
+
+  function sanitizeFilename(name){
+    return (name || 'تقرير').toString().trim().replace(/[\\/:*?"<>|]+/g, '-');
+  }
+
+  async function downloadFullReport(){
+    if(!currentMonth){
+      alert('اختر شهراً أولاً');
+      return;
+    }
+    const monthImages = platformReportsByMonth[currentMonth] || {};
+    const items = [];
+    PLATFORM_ORDER.forEach(p => {
+      (monthImages[p] || []).forEach(img => items.push({ platform: p, url: img.image_url }));
+    });
+
+    if(items.length === 0){
+      alert('لا يوجد صور تقرير لهذا الشهر بعد');
+      return;
+    }
+
+    const btn = document.getElementById('download-report-btn');
+    const originalHtml = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<div class="spin-loader" style="width:20px;height:20px;border:2.5px solid rgba(255,255,255,.35);border-top-color:#fff;border-radius:50%;"></div>';
+
+    try {
+      const { jsPDF } = window.jspdf;
+      const loaded = await Promise.all(items.map(it => loadImageForCanvas(it.url)));
+
+      const headerH = 70;
+      let pdf = null;
+
+      loaded.forEach((img, i) => {
+        const p = items[i].platform;
+        const width = img.naturalWidth;
+        const h = img.naturalHeight;
+        const totalHeight = headerH + h;
+
+        // ارسم صفحة الصورة على كانفاس: هيدر بلون المنصة + الصورة + لوجو شفاف في النص
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = totalHeight;
+        const ctx = canvas.getContext('2d');
+
+        ctx.fillStyle = '#0B0B0E';
+        ctx.fillRect(0, 0, width, totalHeight);
+
+        ctx.fillStyle = PLATFORM_COLORS[p] || '#F159B3';
+        ctx.fillRect(0, 0, width, headerH);
+        ctx.fillStyle = '#ffffff';
+        ctx.font = `bold ${Math.round(headerH * 0.46)}px Tajawal, Cairo, sans-serif`;
+        ctx.direction = 'rtl';
+        ctx.textAlign = 'right';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(getPlatformLabel(p), width - 26, headerH / 2);
+
+        ctx.drawImage(img, 0, headerH, width, h);
+
+        // اللوجو الشفاف في نص منطقة الصورة بالظبط (مش فوق الهيدر)
+        ctx.save();
+        ctx.translate(0, headerH);
+        drawWatermarkLogo(ctx, width, h);
+        ctx.restore();
+
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
+        const orientation = width >= totalHeight ? 'l' : 'p';
+
+        if(!pdf){
+          pdf = new jsPDF({ orientation, unit: 'px', format: [width, totalHeight], hotfixes: ['px_scaling'] });
+        } else {
+          pdf.addPage([width, totalHeight], orientation);
+        }
+        pdf.addImage(dataUrl, 'JPEG', 0, 0, width, totalHeight);
+      });
+
+      const monthLabel = formatMonth(currentMonth);
+      const fileName = `${sanitizeFilename(clientName || clientId)} - ${sanitizeFilename(monthLabel)}.pdf`;
+      pdf.save(fileName);
+
+    } catch(err) {
+      console.error('تعذر تجهيز ملف PDF:', err);
+      alert('تعذر تجهيز التقرير كـ PDF تلقائياً بسبب قيود المتصفح، هيتم فتح كل صورة في تبويب جديد عشان تقدر تحفظها يدوياً.');
+      items.forEach(it => window.open(it.url, '_blank'));
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = originalHtml;
+    }
+  }
+
+  // ===================== UTILITIES =====================
+  function formatNumber(n){
+    if(!n) return '0';
+    if(n >= 1000000) return (n/1000000).toFixed(1) + 'M';
+    if(n >= 1000) return (n/1000).toFixed(1) + 'K';
+    return n.toString();
+  }
+
+  function formatMonth(key){
+    // key format: "2024-01"
+    if(!key || key.length < 7) return key;
+    const [year, month] = key.split('-');
+    const months = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو',
+                   'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
+    return `${months[parseInt(month)-1]} ${year}`;
+  }
+
+  function getPlatformLabel(platform){
+    const labels = {
+      'facebook': 'فيسبوك',
+      'instagram': 'إنستجرام',
+      'tiktok': 'تيك توك',
+      'youtube': 'يوتيوب'
+    };
+    return labels[platform] || platform;
+  }
+
+  function escapeHtml(text){
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  }
+
+  function isContentNew(createdAt){
+    if(!createdAt) return false;
+    const created = new Date(createdAt);
+    const now = new Date();
+    const diff = now - created;
+    return diff < 5 * 60 * 1000; // 5 دقائق
+  }
+
+  function pulseAll(ids){
+    ids.forEach(id => {
+      const el = document.getElementById(id);
+      if(el){
+        el.classList.remove('pulse');
+        void el.offsetWidth;
+        el.classList.add('pulse');
+      }
+    });
+  }
+
+  function updateConnectionStatus(connected){
+    isConnected = connected;
+    const dot = document.getElementById('status-dot');
+    const text = document.getElementById('status-text');
+
+    if(connected){
+      dot.classList.remove('offline');
+      text.textContent = 'اتصال حي';
+    } else {
+      dot.classList.add('offline');
+      text.textContent = 'محاولة إعادة الاتصال...';
+    }
+  }
+
+  function showDashboard(){
+    document.getElementById('loading-view').style.display = 'none';
+    document.getElementById('no-client-view').style.display = 'none';
+    document.getElementById('dashboard-view').style.display = 'block';
+  }
+
+  function showNoClient(){
+    document.getElementById('loading-view').style.display = 'none';
+    document.getElementById('dashboard-view').style.display = 'none';
+    document.getElementById('no-client-view').style.display = 'flex';
+  }
+
+  // ===================== STARTUP =====================
+  init();
+
+  // معالجة فقدان الاتصال
+  window.addEventListener('offline', () => updateConnectionStatus(false));
+  window.addEventListener('online', () => updateConnectionStatus(true));
+</script>
+
+</body>
+</html>
