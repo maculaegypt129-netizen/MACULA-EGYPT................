@@ -1,0 +1,1635 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Macula — Admin Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;900&family=Cairo:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root{
+    --purple:#8263CC; --pink:#F159B3;
+    --pending:#F0C24C; --approved:#3FCB8C; --rejected:#E86A6A; --published:#4C7EF3;
+    --ink:#0B0B0E; --surface:#17171B; --graphite:#2A2A32; --graphite-soft:#1E1E23;
+    --text:#F2F1F5; --muted:#9A97A6; --muted-2:#5C596A;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html,body{background:var(--ink); color:var(--text); font-family:'Cairo',sans-serif; min-height:100vh; width:100%; overflow-x:hidden;}
+  body{background: radial-gradient(circle at 85% -10%, rgba(130,99,204,.14), transparent 45%), radial-gradient(circle at -10% 30%, rgba(241,89,179,.12), transparent 40%), var(--ink);}
+  .mono{font-family:'IBM Plex Mono',monospace; direction:ltr; unicode-bidi:plaintext;}
+  a{color:inherit;}
+  button{font-family:'Cairo'; cursor:pointer;}
+
+  @keyframes spin{ from{transform:rotate(0deg);} to{transform:rotate(360deg);} }
+  @keyframes slideInRight{ from{opacity:0; transform:translateX(20px);} to{opacity:1; transform:translateX(0);} }
+  .spinner{animation:spin .6s linear infinite;}
+
+  .topbar{display:flex; align-items:center; justify-content:space-between; padding:18px 28px; border-bottom:1px solid var(--graphite-soft);}
+  .brand{display:flex; align-items:center; gap:10px; font-family:'Tajawal'; font-weight:900; font-size:19px;}
+  .brand-dot{width:10px; height:10px; border-radius:50%; background:linear-gradient(135deg,var(--pink),var(--purple));}
+  .role-badge{font-size:11.5px; padding:4px 10px; border-radius:999px; border:1px solid var(--graphite); color:var(--muted); margin-inline-start:10px;}
+  .top-right{display:flex; align-items:center; gap:14px; font-size:13px; color:var(--muted);}
+
+  .lang-toggle{
+    display:flex; align-items:center; gap:6px;
+    padding:8px 14px; border-radius:8px; border:1px solid var(--graphite);
+    background:var(--graphite-soft); color:var(--text); font-size:12.5px; font-weight:700;
+    font-family:'Tajawal'; transition:border-color .2s, transform .15s;
+  }
+  .lang-toggle:hover{border-color:var(--pink); transform:translateY(-1px);}
+  .lang-toggle:active{transform:scale(.96);}
+
+  #main-view{max-width:1200px; margin:0 auto; padding:26px;}
+  .section-title{font-family:'Tajawal'; font-weight:800; font-size:17px; margin:26px 0 14px;}
+  .section-sub{font-size:12.5px; color:var(--muted); margin:-8px 0 14px;}
+  .toolbar{display:flex; gap:10px; flex-wrap:wrap; align-items:center;}
+
+  /* CLIENT SELECTOR */
+  .client-selector{
+    background:var(--surface); border:1px solid var(--graphite); border-radius:12px; padding:16px;
+    margin-bottom:24px; display:flex; gap:12px; align-items:flex-end; flex-wrap:wrap;
+  }
+  .field{flex:1; min-width:200px;}
+  .field label{display:block; font-size:12.5px; color:var(--muted); margin-bottom:6px;}
+  .field input, .field select, .field textarea{
+    width:100%; background:var(--ink); border:1px solid var(--graphite); color:var(--text);
+    padding:11px 13px; border-radius:9px; font-family:'Cairo'; font-size:14px; outline:none;
+  }
+  .field input:focus, .field select:focus, .field textarea:focus{border-color:var(--pink);}
+  .field input:disabled{opacity:.6; cursor:not-allowed;}
+
+  .client-status{
+    padding:12px 16px; background:var(--graphite-soft); border-radius:9px;
+    border:1px solid var(--graphite); font-size:13px;
+  }
+  .client-status.active{background:rgba(63,203,140,.14); border-color:var(--approved);}
+
+  /* CLIENT AVATAR (صورة العميل) */
+  .client-avatar-box{
+    display:none; align-items:center; gap:14px;
+    background:var(--surface); border:1px solid var(--graphite); border-radius:12px;
+    padding:14px 16px; margin-bottom:24px;
+  }
+  .client-avatar-box.active{display:flex;}
+  .client-avatar{
+    width:56px; height:56px; border-radius:50%; overflow:hidden; flex-shrink:0;
+    display:flex; align-items:center; justify-content:center; position:relative; cursor:pointer;
+    font-family:'Tajawal'; font-weight:700; font-size:18px; color:#fff;
+    background:linear-gradient(135deg, var(--pink), var(--purple));
+    border:2px solid rgba(255,255,255,.15);
+  }
+  .client-avatar img{width:100%; height:100%; object-fit:cover; display:none;}
+  .client-avatar-upload-btn{
+    position:absolute; bottom:-2px; right:-2px; width:22px; height:22px; border-radius:50%;
+    background:var(--ink); border:2px solid var(--surface);
+    display:flex; align-items:center; justify-content:center; cursor:pointer; color:var(--text); padding:0;
+  }
+  .client-avatar-upload-btn svg{width:12px; height:12px;}
+  .client-avatar-remove-btn{
+    position:absolute; top:-2px; left:-2px; width:20px; height:20px; border-radius:50%;
+    background:var(--rejected, #E5484D); border:2px solid var(--surface);
+    display:flex; align-items:center; justify-content:center; cursor:pointer; color:#fff; padding:0;
+  }
+  .client-avatar-remove-btn svg{width:10px; height:10px;}
+  .client-avatar-upload-input{display:none;}
+  .client-avatar-info{font-size:12.5px; color:var(--muted);}
+  .client-avatar-info strong{display:block; color:var(--text); font-size:14px; margin-bottom:2px;}
+
+  /* CLIENT SEARCH (بحث باسم العميل — الخانة نفسها ثابتة، والنتائج بتتمرجح جوه بوكس صغير تحتها) */
+  .client-search-wrap{position:relative;}
+  .client-search-dropdown{
+    display:none; position:absolute; top:calc(100% + 6px); right:0; left:0; z-index:50;
+    background:var(--surface); border:1px solid var(--graphite); border-radius:10px;
+    max-height:260px; overflow-y:auto; box-shadow:0 14px 30px -10px rgba(0,0,0,.6);
+  }
+  .client-search-dropdown.open{display:block;}
+  .client-search-item{padding:11px 14px; font-size:13.5px; cursor:pointer; border-bottom:1px solid var(--graphite-soft);}
+  .client-search-item:last-child{border-bottom:none;}
+  .client-search-item:hover{background:var(--graphite-soft); color:var(--pink);}
+  .client-search-empty{padding:12px 14px; font-size:12.5px; color:var(--muted); text-align:center;}
+
+  .btn{
+    border:none; border-radius:9px; padding:11px 16px; font-weight:700;
+    font-family:'Tajawal'; font-size:13px; cursor:pointer; transition:transform .15s;
+  }
+  .btn:active{transform:scale(.96);}
+  .btn:disabled{opacity:.55; cursor:not-allowed;}
+  .btn-primary{background:linear-gradient(90deg,var(--pink),var(--purple)); color:#fff;}
+  .btn-primary:hover{filter:brightness(1.08);}
+  .btn-secondary{background:var(--surface); border:1px solid var(--graphite); color:var(--text);}
+  .btn-secondary:hover{border-color:var(--pink);}
+  .btn-danger{background:rgba(232,106,106,.14); border:1px solid var(--rejected); color:var(--rejected);}
+  .btn-danger:hover{filter:brightness(1.1);}
+
+  /* FORMS */
+  .form-section{
+    background:var(--surface); border:1px solid var(--graphite); border-radius:14px;
+    padding:20px; margin-bottom:20px;
+  }
+
+  /* MONTH SELECTOR */
+  .month-selector{
+    display:flex; gap:8px; align-items:center; margin-bottom:16px; flex-wrap:wrap;
+  }
+  .month-selector label{font-size:13px; color:var(--muted);}
+  .month-selector input{
+    width:150px; background:var(--ink); border:1px solid var(--graphite); color:var(--text);
+    padding:8px 10px; border-radius:8px; font-family:'Cairo'; font-size:12px; outline:none;
+  }
+  .month-selector input:focus{border-color:var(--pink);}
+
+  /* CONTENT UPLOAD */
+  .upload-area{
+    border:2px dashed var(--graphite); border-radius:12px; padding:40px 20px; text-align:center;
+    background:var(--ink); cursor:pointer; transition:border-color .2s, background-color .2s;
+    position:relative; display:block;
+  }
+  .upload-area:hover{border-color:var(--pink); background:var(--graphite-soft);}
+  .upload-area.dragover{border-color:var(--pink); background:rgba(241,89,179,.08);}
+  .upload-area-icon{font-size:32px; margin-bottom:10px;}
+  .upload-area-text{color:var(--muted); font-size:13.5px; line-height:1.8;}
+  .upload-area-highlight{color:var(--pink); font-weight:600;}
+  #file-input, #content-file-input, #report-file-input{display:none;}
+
+  .uploaded-files{display:grid; grid-template-columns:repeat(auto-fill, minmax(120px, 1fr)); gap:12px; margin-top:16px;}
+  .file-card{
+    background:var(--graphite-soft); border:1px solid var(--graphite); border-radius:10px;
+    padding:12px; text-align:center; position:relative; animation:slideInRight .3s ease;
+  }
+  .file-card-thumb{
+    width:100%; aspect-ratio:1; background:var(--ink); border-radius:6px;
+    display:flex; align-items:center; justify-content:center; margin-bottom:8px; overflow:hidden;
+  }
+  .file-card-thumb img, .file-card-thumb video{width:100%; height:100%; object-fit:cover;}
+  .file-card-name{font-size:11px; color:var(--text); word-break:break-all; margin-bottom:8px; display:block; cursor:pointer;}
+  .file-card-remove{
+    width:24px; height:24px; border-radius:50%; background:var(--rejected);
+    color:#fff; border:none; font-size:12px; cursor:pointer; position:absolute; top:-8px; right:-8px;
+  }
+  .empty-note{color:var(--muted); font-size:12.5px; grid-column:1/-1; padding:14px 0;}
+
+  /* SUCCESS/ERROR MESSAGES */
+  .alert{
+    padding:12px 16px; border-radius:9px; margin-bottom:12px; font-size:13px;
+    display:flex; align-items:center; gap:8px; animation:slideInRight .3s ease;
+  }
+  .alert-success{background:rgba(63,203,140,.14); color:var(--approved); border-left:3px solid var(--approved);}
+  .alert-error{background:rgba(232,106,106,.14); color:var(--rejected); border-left:3px solid var(--rejected);}
+  .alert-info{background:rgba(76,126,243,.14); color:var(--published); border-left:3px solid var(--published);}
+  .alert-close{background:none; border:none; color:inherit; cursor:pointer; font-size:16px;}
+
+  /* PLATFORM TABS (used for content platform picker) */
+  .platform-tabs{display:flex; gap:8px; margin-bottom:16px; flex-wrap:wrap;}
+  .platform-tab{
+    padding:9px 16px; border-radius:999px; border:1px solid var(--graphite);
+    background:var(--ink); font-size:13px; color:var(--muted); cursor:pointer;
+    transition:border-color .2s, background-color .2s, color .2s;
+  }
+  .platform-tab.active{border-color:var(--pink); color:var(--text); background:rgba(241,89,179,.12);}
+
+  /* PER-PLATFORM SINGLE IMAGE CARDS */
+  .platform-image-grid{display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:14px;}
+  .platform-image-card{
+    background:var(--graphite-soft); border:1px solid var(--graphite); border-radius:12px; padding:14px;
+  }
+  .platform-image-card-head{font-family:'Tajawal'; font-weight:700; font-size:13.5px; margin-bottom:10px;}
+  .platform-image-card .upload-area{padding:22px 10px;}
+  .platform-image-card .upload-area-icon{font-size:22px; margin-bottom:6px;}
+  .platform-image-card .upload-area-text{font-size:11.5px;}
+  .thumb-clickable{width:100%; aspect-ratio:1; background:var(--ink); border-radius:8px; overflow:hidden; cursor:zoom-in; border:1px solid var(--graphite);}
+  .thumb-clickable img, .thumb-clickable video{width:100%; height:100%; object-fit:cover; display:block;}
+
+  /* شبكة الصور المتعددة لكل منصة (رفع أكتر من صورة) */
+  .platform-image-multi-grid{display:grid; grid-template-columns:repeat(auto-fill, minmax(64px, 1fr)); gap:8px;}
+  .mini-thumb{position:relative; aspect-ratio:1; border-radius:8px; overflow:hidden; border:1px solid var(--graphite); background:var(--ink); cursor:zoom-in;}
+  .mini-thumb img{width:100%; height:100%; object-fit:cover; display:block;}
+  .mini-thumb.pending{border-style:dashed; border-color:var(--pink); cursor:default;}
+  .mini-thumb-remove{
+    position:absolute; top:3px; left:3px; width:18px; height:18px; border-radius:50%;
+    background:rgba(0,0,0,.65); color:#fff; border:none; font-size:10px; cursor:pointer;
+    display:flex; align-items:center; justify-content:center; padding:0; line-height:1;
+  }
+  .mini-thumb-remove:hover{background:var(--rejected);}
+
+  /* CLIENT LINK */
+  .client-link-box{
+    background:var(--graphite-soft); border:1px solid var(--graphite); border-radius:10px;
+    padding:16px; margin-bottom:16px; display:none;
+  }
+  .client-link-box.active{display:block;}
+  .client-link-label{font-size:12px; color:var(--muted); margin-bottom:8px;}
+  .client-link-input{
+    width:100%; background:var(--ink); border:1px solid var(--graphite); color:var(--text);
+    padding:12px; border-radius:8px; font-family:'IBM Plex Mono'; font-size:12px; outline:none;
+  }
+  .client-link-btn{
+    background:none; border:none; color:var(--pink); cursor:pointer; font-size:12px; font-weight:600;
+    margin-top:8px;
+  }
+
+  /* LIGHTBOX */
+  .lightbox-overlay{
+    position:fixed; inset:0; background:rgba(0,0,0,.9); z-index:3000;
+    display:none; align-items:center; justify-content:center; padding:24px; cursor:zoom-out;
+  }
+  .lightbox-overlay.active{display:flex;}
+  .lightbox-content{max-width:92vw; max-height:88vh; border-radius:10px; cursor:default; display:block;}
+  .lightbox-close{
+    position:absolute; top:18px; left:18px; width:40px; height:40px; border-radius:50%;
+    background:rgba(255,255,255,.1); border:none; color:#fff; font-size:18px; cursor:pointer;
+  }
+  .lightbox-close:hover{background:rgba(255,255,255,.2);}
+
+  @media(max-width:768px){
+    .client-selector{flex-direction:column; align-items:stretch;}
+    .field{min-width:100%;}
+    .uploaded-files{grid-template-columns:repeat(auto-fill, minmax(80px, 1fr));}
+    #main-view{padding:18px;}
+    .topbar{padding:14px 16px;}
+  }
+
+  @media(max-width:420px){
+    .brand{font-size:16px;}
+    .role-badge{font-size:10px; padding:3px 8px; margin-inline-start:6px;}
+    .section-title{font-size:15px;}
+    .platform-image-multi-grid{grid-template-columns:repeat(auto-fill, minmax(56px, 1fr));}
+    .month-selector input{width:130px;}
+  }
+
+  /* SPLITTER */
+  .split-divider{
+    position:absolute; left:0; right:0; height:8px; margin-top:-4px;
+    background:linear-gradient(90deg,var(--pink),var(--purple)); cursor:ns-resize;
+    touch-action:none; z-index:5; box-shadow:0 0 8px rgba(241,89,179,.6);
+    display:flex; align-items:center; justify-content:center;
+  }
+  .split-divider::after{ content:"⠿"; color:#fff; font-size:11px; line-height:1; }
+  .split-zone-label{
+    position:absolute; right:8px; z-index:4; font-size:11.5px; font-weight:700;
+    background:rgba(0,0,0,.6); color:#fff; padding:3px 10px; border-radius:999px;
+    pointer-events:none; font-family:'Tajawal';
+  }
+</style>
+</head>
+<body>
+
+<!-- LOGIN OVERLAY -->
+<div id="login-overlay" style="position:fixed; inset:0; background:var(--ink); z-index:1000; display:flex; align-items:center; justify-content:center; padding:20px;">
+  <button class="lang-toggle" id="lang-toggle-btn-login" onclick="toggleLanguage()" style="position:absolute; top:18px; inset-inline-end:18px;">
+    <span id="lang-toggle-label-login">العربية</span>
+  </button>
+  <div style="background:var(--surface); border:1px solid var(--graphite); border-radius:14px; padding:32px; width:100%; max-width:340px; text-align:center;">
+    <div class="brand" style="justify-content:center; margin-bottom:20px;">
+      <div class="brand-dot"></div>
+      <div>Macula<span class="role-badge" data-i18n="adminBadge">👨‍💼 Admin</span></div>
+    </div>
+    <div style="color:var(--muted); font-size:13px; margin-bottom:18px;" data-i18n="loginPrompt">Enter your password to access the dashboard</div>
+    <input type="password" id="login-password" placeholder="Password" data-i18n-placeholder="passwordPlaceholder" autocomplete="off"
+      style="width:100%; background:var(--ink); border:1px solid var(--graphite); color:var(--text); padding:12px 13px; border-radius:9px; font-family:'Cairo'; font-size:14px; outline:none; margin-bottom:10px; text-align:center;"
+      onkeydown="if(event.key==='Enter') checkPassword();">
+    <div id="login-error" style="color:var(--rejected); font-size:12.5px; margin-bottom:10px; display:none;" data-i18n="wrongPassword">❌ Incorrect password</div>
+    <button class="btn btn-primary" style="width:100%;" onclick="checkPassword()" data-i18n="loginButton">Log in</button>
+  </div>
+</div>
+
+<div id="app-content" style="display:none;">
+<div class="topbar">
+  <div class="brand">
+    <div class="brand-dot"></div>
+    <div>Macula<span class="role-badge" data-i18n="adminBadge">👨‍💼 Admin</span></div>
+  </div>
+  <div class="top-right">
+    <button class="lang-toggle" id="lang-toggle-btn" onclick="toggleLanguage()">
+      <span id="lang-toggle-label">العربية</span>
+    </button>
+    <span id="admin-name">Admin</span>
+  </div>
+</div>
+
+<div id="main-view">
+
+  <!-- CLIENT SELECTOR -->
+  <div class="section-title" data-i18n="chooseClient">Choose a client</div>
+  <div class="client-selector">
+    <div class="field client-search-wrap" style="flex:2;">
+      <label data-i18n="clientNameLabel">Client name</label>
+      <input type="text" id="client-search-input" placeholder="🔍 Search by client name..." data-i18n-placeholder="clientSearchPlaceholder" autocomplete="off"
+        oninput="onClientSearchInput()" onfocus="onClientSearchInput()">
+      <div class="client-search-dropdown" id="client-search-dropdown"></div>
+    </div>
+    <div class="client-status" id="client-status" style="opacity:.5;" data-i18n="noClientSelected">No client selected</div>
+  </div>
+
+  <!-- CLIENT AVATAR -->
+  <div class="client-avatar-box" id="client-avatar-box">
+    <div class="client-avatar" id="client-avatar" title="Upload photo" onclick="document.getElementById('client-avatar-upload-input').click()">
+      <img id="client-avatar-img" src="" alt="">
+      <span id="client-avatar-letter">C</span>
+      <button type="button" class="client-avatar-upload-btn" onclick="event.stopPropagation(); document.getElementById('client-avatar-upload-input').click();" data-i18n-title="uploadPhotoTitle" title="Upload photo">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+          <circle cx="12" cy="13" r="4"></circle>
+        </svg>
+      </button>
+      <button type="button" class="client-avatar-remove-btn" id="client-avatar-remove-btn" onclick="event.stopPropagation(); removeClientAvatar();" data-i18n-title="removePhotoTitle" title="Remove photo" style="display:none;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M18 6L6 18"></path>
+          <path d="M6 6l12 12"></path>
+        </svg>
+      </button>
+      <input type="file" id="client-avatar-upload-input" class="client-avatar-upload-input" accept="image/*" onchange="handleClientAvatarUpload(event)">
+    </div>
+    <div class="client-avatar-info">
+      <strong data-i18n="clientPhotoLabel">Client photo</strong>
+      <span data-i18n="clientPhotoHint">Click the circle to upload a photo</span>
+    </div>
+  </div>
+
+  <!-- CLIENT LINK -->
+  <div class="client-link-box" id="client-link-box">
+    <div class="client-link-label" data-i18n="clientLinkLabel">Client link (copy and send to the client):</div>
+    <div style="display:flex; gap:8px;">
+      <input type="text" class="client-link-input" id="client-link" readonly>
+      <button class="client-link-btn" onclick="copyClientLink()" data-i18n="copyButton">📋 Copy</button>
+    </div>
+  </div>
+
+  <div class="month-selector">
+    <label data-i18n="monthSelectorLabel">📅 Month:</label>
+    <input type="month" id="report-month" onchange="onMonthChange()">
+  </div>
+
+  <div id="alerts-container"></div>
+
+  <!-- MONTHLY REPORT SPLIT UPLOAD -->
+  <div class="section-title" data-i18n="monthlyReportTitle">📊 Upload monthly report (auto-split one image)</div>
+  <div class="section-sub" data-i18n="monthlyReportSub">Upload one image that combines all platforms and it will be split automatically — if you don't need this, use the manual upload for each platform below</div>
+
+  <div class="form-section">
+    <div class="form-group" style="margin-bottom:8px;">
+      <label style="font-size:12.5px; color:var(--muted);" data-i18n="fullReportImageLabel">Full report image</label>
+    </div>
+    <div id="report-upload-area" class="upload-area" ondrop="handleReportDrop(event)" ondragover="handleReportDragOver(event)" ondragout="handleReportDragOut(event)" onclick="document.getElementById('report-file-input').click()">
+      <div class="upload-area-icon">📊</div>
+      <div class="upload-area-text">
+        <span data-i18n="reportUploadText1">Click here or</span> <span class="upload-area-highlight" data-i18n="reportUploadHighlight">drag the full report image</span><br>
+        PNG, JPG
+      </div>
+    </div>
+    <input type="file" id="report-file-input" accept="image/*" onchange="handleReportFileSelect(event)">
+
+    <!-- SPLITTER -->
+    <div id="report-splitter" style="display:none; margin-top:16px;">
+      <div style="color:var(--muted); font-size:12.5px; margin-bottom:10px; line-height:1.8;" data-i18n-html="splitterInstructions">
+        ✋ Drag the colored lines to fit each platform's boundary on your image, then press "Split &amp; upload."<br>
+        Order from top to bottom: <strong>Facebook ← Instagram ← TikTok ← YouTube</strong>
+      </div>
+      <div id="splitter-canvas-wrap" style="position:relative; border:1px solid var(--graphite); border-radius:10px; overflow:hidden; max-width:520px; margin:0 auto; user-select:none;">
+        <img id="splitter-img" style="width:100%; display:block; pointer-events:none;">
+        <!-- zone labels + dividers injected by JS -->
+      </div>
+      <div style="display:flex; gap:10px; margin-top:16px;">
+        <button class="btn btn-primary" onclick="splitAndUploadReport()" id="split-upload-btn" style="flex:1;" data-i18n="splitUploadButton">
+          ✂️ Split image and upload to each platform
+        </button>
+        <button class="btn btn-secondary" onclick="removeReportImage()" data-i18n="cancelButton">✕ Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- PER-PLATFORM SINGLE IMAGE (OPTIONAL) -->
+  <div class="section-title" data-i18n="perPlatformImageTitle">🖼️ Upload an image per platform (optional)</div>
+  <div class="section-sub" data-i18n="perPlatformImageSub">Instead of auto-splitting, you can upload a different image for each platform. Existing images show here and you can delete or replace them</div>
+
+  <div class="form-section">
+    <div class="platform-image-grid" id="platform-image-cards"></div>
+  </div>
+
+  <!-- CONTENT (POSTS/VIDEOS) MULTI UPLOAD -->
+  <div class="section-title" data-i18n="contentUploadTitle">🎬 Upload posts (images & videos)</div>
+  <div class="section-sub" data-i18n="contentUploadSub">You can select more than one image or video at once — choose the platform first</div>
+
+  <div class="form-section">
+    <div class="platform-tabs" id="content-platform-tabs">
+      <div class="platform-tab active" data-platform="facebook" data-i18n="tabFacebook">📘 Facebook</div>
+      <div class="platform-tab" data-platform="instagram" data-i18n="tabInstagram">📷 Instagram</div>
+      <div class="platform-tab" data-platform="tiktok" data-i18n="tabTiktok">🎵 TikTok</div>
+      <div class="platform-tab" data-platform="youtube" data-i18n="tabYoutube">▶️ YouTube</div>
+    </div>
+
+    <div id="content-upload-area" class="upload-area" ondrop="handleContentDrop(event)" ondragover="handleContentDragOver(event)" ondragout="handleContentDragOut(event)" onclick="document.getElementById('content-file-input').click()">
+      <div class="upload-area-icon">🎞️</div>
+      <div class="upload-area-text">
+        <span data-i18n="contentUploadText1">Click here or</span> <span class="upload-area-highlight" data-i18n="contentUploadHighlight">drag images or videos</span> <span data-i18n="contentUploadText2">(you can select more than one file)</span><br>
+        PNG, JPG, MP4, MOV
+      </div>
+    </div>
+    <input type="file" id="content-file-input" accept="image/*,video/*" multiple onchange="handleContentFileSelect(event)">
+
+    <div class="uploaded-files" id="content-pending-preview"></div>
+    <button class="btn btn-primary" id="content-upload-btn" style="width:100%; margin-top:14px; display:none;" onclick="uploadPendingContent()" data-i18n="uploadSelectedButton">⬆️ Upload selected files</button>
+
+    <div style="margin-top:24px; padding-top:18px; border-top:1px solid var(--graphite);">
+      <div style="font-family:'Tajawal'; font-weight:700; font-size:13.5px; margin-bottom:12px;" data-i18n="uploadedThisMonthLabel">Files uploaded for this platform this month</div>
+      <div class="uploaded-files" id="content-existing-list"></div>
+    </div>
+  </div>
+
+</div>
+</div><!-- /app-content -->
+
+<!-- LIGHTBOX -->
+<div id="lightbox" class="lightbox-overlay" onclick="if(event.target===this) closeLightbox();">
+  <button class="lightbox-close" onclick="closeLightbox()">✕</button>
+  <img id="lightbox-img" class="lightbox-content" src="" style="display:none;">
+  <video id="lightbox-video" class="lightbox-content" controls style="display:none;"></video>
+</div>
+
+<script>
+  // ===================== LANGUAGE / TRANSLATIONS (page opens in English by default) =====================
+  let currentLang = 'en';
+
+  const I18N = {
+    en: {
+      pageTitle: 'Macula — Admin Dashboard',
+      adminBadge: '👨‍💼 Admin',
+      loginPrompt: 'Enter your password to access the dashboard',
+      passwordPlaceholder: 'Password',
+      wrongPassword: '❌ Incorrect password',
+      loginButton: 'Log in',
+      chooseClient: 'Choose a client',
+      clientNameLabel: 'Client name',
+      clientSearchPlaceholder: '🔍 Search by client name...',
+      noClientSelected: 'No client selected',
+      noClientsFound: 'No clients found with that name',
+      clientLinkLabel: 'Client link (copy and send to the client):',
+      copyButton: '📋 Copy',
+      linkCopied: '✅ Link copied successfully!',
+      monthSelectorLabel: '📅 Month:',
+      monthlyReportTitle: '📊 Upload monthly report (auto-split one image)',
+      monthlyReportSub: "Upload one image that combines all platforms and it will be split automatically — if you don't need this, use the manual upload for each platform below",
+      fullReportImageLabel: 'Full report image',
+      reportUploadText1: 'Click here or',
+      reportUploadHighlight: 'drag the full report image',
+      splitterInstructions: '✋ Drag the colored lines to fit each platform\'s boundary on your image, then press "Split &amp; upload."<br>Order from top to bottom: <strong>Facebook ← Instagram ← TikTok ← YouTube</strong>',
+      splitUploadButton: '✂️ Split image and upload to each platform',
+      splitUploadButtonLoading: '⏳ Splitting and uploading...',
+      cancelButton: '✕ Cancel',
+      perPlatformImageTitle: '🖼️ Upload an image per platform (optional)',
+      perPlatformImageSub: 'Instead of auto-splitting, you can upload a different image for each platform. Existing images show here and you can delete or replace them',
+      contentUploadTitle: '🎬 Upload posts (images & videos)',
+      contentUploadSub: 'You can select more than one image or video at once — choose the platform first',
+      tabFacebook: '📘 Facebook', tabInstagram: '📷 Instagram', tabTiktok: '🎵 TikTok', tabYoutube: '▶️ YouTube',
+      contentUploadText1: 'Click here or',
+      contentUploadHighlight: 'drag images or videos',
+      contentUploadText2: '(you can select more than one file)',
+      uploadSelectedButton: '⬆️ Upload selected files',
+      uploadSelectedButtonLoading: '⏳ Uploading...',
+      uploadedThisMonthLabel: 'Files uploaded for this platform this month',
+      replaceLabel: '🔁 Replace',
+      chooseClientFirst: 'Please choose a client first',
+      chooseMonthFirst: 'Please choose a month first',
+      selectClientFirstErr: 'Please choose a client first',
+      uploadReportFirst: 'Please upload the full report image first',
+      splitUploadSuccess: '✅ Image split and uploaded to every platform successfully! The client will see it right away.',
+      genericError: '❌ Error: ',
+      loadClientsError: 'Error loading clients: ',
+      selectedClientLabel: '✅ Selected: ',
+      clientPhotoLabel: 'Client photo',
+      clientPhotoHint: 'Click the circle to upload a photo',
+      uploadPhotoTitle: 'Upload photo',
+      avatarUploadSuccess: '✅ Photo uploaded successfully',
+      avatarUploadError: '❌ Error uploading photo: ',
+      removePhotoTitle: 'Remove photo',
+      avatarRemoveSuccess: '✅ Photo removed',
+      avatarRemoveError: '❌ Error removing photo: ',
+      noImagesYet: 'No images yet',
+      addImageHint: 'Click to add an image or more',
+      uploadNImages: '⬆️ Upload {n} image',
+      confirmDeletePlatformImage: 'Are you sure you want to delete this {platform} image?',
+      deletePlatformImageSuccess: '✅ {platform} image deleted',
+      deleteError: '❌ Error deleting: ',
+      uploadError: '❌ Upload error: ',
+      uploadSuccessGeneric: '✅ Uploaded {n} file successfully',
+      uploadPartialError: '❌ Upload error ({done} of {total} uploaded): ',
+      noClientChosenEmpty: 'Choose a client first',
+      noFilesUploadedForPlatform: 'No files uploaded for this platform yet',
+      confirmDeleteFile: 'Are you sure you want to delete this file?',
+      deletedSuccess: '✅ Deleted',
+      replaceSuccess: '✅ Replaced successfully',
+      replaceError: '❌ Error replacing: ',
+      supabaseNotConfigured: '⚠️ The database has not been connected yet. Open the dashboard file and set the correct SUPABASE_URL and SUPABASE_KEY from your Supabase project (the two lines under CONFIG).',
+      itemNotFoundError: '❌ Could not find this item — try refreshing the page and trying again.',
+      unexpectedError: '❌ Unexpected error: ',
+      platforms: { facebook:'Facebook', instagram:'Instagram', tiktok:'TikTok', youtube:'YouTube' },
+      platformsFull: { facebook:'📘 Facebook', instagram:'📷 Instagram', tiktok:'🎵 TikTok', youtube:'▶️ YouTube' }
+    },
+    ar: {
+      pageTitle: 'Macula — لوحة التحكم الإدارية',
+      adminBadge: '👨‍💼 الإدارة',
+      loginPrompt: 'أدخل كلمة المرور للدخول إلى لوحة التحكم',
+      passwordPlaceholder: 'كلمة المرور',
+      wrongPassword: '❌ كلمة المرور غير صحيحة',
+      loginButton: 'دخول',
+      chooseClient: 'اختر العميل',
+      clientNameLabel: 'اسم العميل',
+      clientSearchPlaceholder: '🔍 ابحث باسم العميل...',
+      noClientSelected: 'لم يتم اختيار عميل',
+      noClientsFound: 'لا يوجد عملاء بهذا الاسم',
+      clientLinkLabel: 'رابط العميل (انسخ وأرسله للعميل):',
+      copyButton: '📋 نسخ',
+      linkCopied: '✅ تم نسخ الرابط بنجاح!',
+      monthSelectorLabel: '📅 الشهر:',
+      monthlyReportTitle: '📊 رفع التقرير الشهري (تقسيم صورة واحدة تلقائياً)',
+      monthlyReportSub: 'ارفع صورة واحدة تجمع كل المنصات وهيتم تقسيمها تلقائياً — لو مش محتاجها استخدم الرفع اليدوي لكل منصة تحت',
+      fullReportImageLabel: 'صورة التقرير الكاملة',
+      reportUploadText1: 'اضغط هنا أو',
+      reportUploadHighlight: 'اسحب صورة التقرير الكاملة',
+      splitterInstructions: '✋ اسحب الخطوط الملوّنة عشان تظبط حدود كل منصة على صورتك، بعدين دوس "قسّم وارفع".<br>الترتيب من فوق لتحت: <strong>فيسبوك ← إنستجرام ← تيك توك ← يوتيوب</strong>',
+      splitUploadButton: '✂️ قسّم الصورة وارفعها لكل منصة',
+      splitUploadButtonLoading: '⏳ جاري التقسيم والرفع...',
+      cancelButton: '✕ إلغاء',
+      perPlatformImageTitle: '🖼️ رفع صورة لكل منصة (اختياري)',
+      perPlatformImageSub: 'بدل التقسيم التلقائي، تقدر ترفع صورة مختلفة لكل منصة على حدة. الصور الموجودة تظهر هنا وتقدر تحذفها أو تستبدلها',
+      contentUploadTitle: '🎬 رفع المنشورات (صور وفيديوهات)',
+      contentUploadSub: 'تقدر تختار أكتر من صورة أو فيديو مرة واحدة، اختر المنصة الأول',
+      tabFacebook: '📘 فيسبوك', tabInstagram: '📷 إنستجرام', tabTiktok: '🎵 تيك توك', tabYoutube: '▶️ يوتيوب',
+      contentUploadText1: 'اضغط هنا أو',
+      contentUploadHighlight: 'اسحب صور أو فيديوهات',
+      contentUploadText2: '(يمكن اختيار أكثر من ملف)',
+      uploadSelectedButton: '⬆️ رفع الملفات المختارة',
+      uploadSelectedButtonLoading: '⏳ جاري الرفع...',
+      uploadedThisMonthLabel: 'الملفات المرفوعة لهذه المنصة هذا الشهر',
+      replaceLabel: '🔁 استبدال',
+      chooseClientFirst: 'من فضلك اختر عميل أولاً',
+      chooseMonthFirst: 'من فضلك اختر شهراً',
+      selectClientFirstErr: 'من فضلك اختر عميل أولاً',
+      uploadReportFirst: 'من فضلك ارفع صورة التقرير الكاملة أولاً',
+      splitUploadSuccess: '✅ تم تقسيم الصورة ورفعها لكل منصة بنجاح! سيراها العميل فوراً.',
+      genericError: '❌ خطأ: ',
+      loadClientsError: 'خطأ في تحميل العملاء: ',
+      selectedClientLabel: '✅ تم اختيار: ',
+      clientPhotoLabel: 'صورة العميل',
+      clientPhotoHint: 'اضغط على الدائرة لرفع صورة',
+      uploadPhotoTitle: 'رفع صورة',
+      avatarUploadSuccess: '✅ تم رفع الصورة بنجاح',
+      avatarUploadError: '❌ خطأ في رفع الصورة: ',
+      removePhotoTitle: 'حذف الصورة',
+      avatarRemoveSuccess: '✅ تم حذف الصورة',
+      avatarRemoveError: '❌ خطأ في حذف الصورة: ',
+      noImagesYet: 'لا يوجد صور بعد',
+      addImageHint: 'اضغط لإضافة صورة أو أكتر',
+      uploadNImages: '⬆️ رفع {n} صورة',
+      confirmDeletePlatformImage: 'متأكد إنك عايز تحذف صورة {platform} دي؟',
+      deletePlatformImageSuccess: '✅ تم حذف صورة {platform}',
+      deleteError: '❌ خطأ في الحذف: ',
+      uploadError: '❌ خطأ في الرفع: ',
+      uploadSuccessGeneric: '✅ تم رفع {n} ملف بنجاح',
+      uploadPartialError: '❌ خطأ في الرفع (تم رفع {done} من {total}): ',
+      noClientChosenEmpty: 'اختر عميلاً أولاً',
+      noFilesUploadedForPlatform: 'لا توجد ملفات مرفوعة لهذه المنصة بعد',
+      confirmDeleteFile: 'متأكد إنك عايز تحذف الملف ده؟',
+      deletedSuccess: '✅ تم الحذف',
+      replaceSuccess: '✅ تم الاستبدال بنجاح',
+      replaceError: '❌ خطأ في الاستبدال: ',
+      supabaseNotConfigured: '⚠️ لم يتم ربط قاعدة البيانات بعد. افتح ملف admin-dashboard.html وضع SUPABASE_URL و SUPABASE_KEY الصحيحة من مشروعك على Supabase (السطرين الموجودين تحت CONFIG).',
+      itemNotFoundError: '❌ الملف ده مش موجود دلوقتي — حاول تعمل رفرش للصفحة وتجرب تاني.',
+      unexpectedError: '❌ خطأ غير متوقع: ',
+      platforms: { facebook:'فيسبوك', instagram:'إنستجرام', tiktok:'تيك توك', youtube:'يوتيوب' },
+      platformsFull: { facebook:'📘 فيسبوك', instagram:'📷 إنستجرام', tiktok:'🎵 تيك توك', youtube:'▶️ يوتيوب' }
+    }
+  };
+
+  function t(key){
+    return (I18N[currentLang] && I18N[currentLang][key] !== undefined) ? I18N[currentLang][key] : key;
+  }
+
+  function applyStaticTranslations(){
+    document.title = t('pageTitle');
+    document.documentElement.lang = currentLang;
+    document.documentElement.dir = currentLang === 'ar' ? 'rtl' : 'ltr';
+
+    document.querySelectorAll('[data-i18n]').forEach(el => {
+      el.textContent = t(el.getAttribute('data-i18n'));
+    });
+    document.querySelectorAll('[data-i18n-html]').forEach(el => {
+      el.innerHTML = t(el.getAttribute('data-i18n-html'));
+    });
+    document.querySelectorAll('[data-i18n-title]').forEach(el => {
+      el.title = t(el.getAttribute('data-i18n-title'));
+    });
+    document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+      el.placeholder = t(el.getAttribute('data-i18n-placeholder'));
+    });
+
+    ['lang-toggle-label', 'lang-toggle-label-login'].forEach(id => {
+      const el = document.getElementById(id);
+      if(el) el.textContent = currentLang === 'en' ? 'العربية' : 'English';
+    });
+
+    // إعادة رسم الأجزاء الديناميكية اللي كانت متولّدة باللغة القديمة
+    if(typeof renderPlatformImageCards === 'function') renderPlatformImageCards();
+    if(typeof renderPendingContentPreview === 'function') renderPendingContentPreview();
+    if(typeof renderExistingContent === 'function') renderExistingContent();
+    if(typeof renderSplitterOverlay === 'function' && typeof splitterImg !== 'undefined' && splitterImg) renderSplitterOverlay();
+    if(typeof renderClientSearchResults === 'function' && document.getElementById('client-search-dropdown').classList.contains('open')){
+      renderClientSearchResults(document.getElementById('client-search-input').value.trim().toLowerCase());
+    }
+  }
+
+  function setLanguage(lang){
+    if(lang !== 'en' && lang !== 'ar') return;
+    currentLang = lang;
+    applyStaticTranslations();
+  }
+
+  function toggleLanguage(){
+    setLanguage(currentLang === 'en' ? 'ar' : 'en');
+  }
+
+  // ===================== STATE (يتم تهيئتها أولاً قبل أي كود قابل للفشل) =====================
+  let selectedClientId = null;
+  let allClients = [];
+  let reportImageFile = null;
+
+  const PLATFORMS = ['facebook', 'instagram', 'tiktok', 'youtube'];
+  function platformLabelsFull(){ return I18N[currentLang].platformsFull; }
+
+  // ===================== ADMIN LOGIN =====================
+  const ADMIN_PASSWORD = '123'; // كلمة مرور لوحة التحكم
+
+  function checkPassword(){
+    const input = document.getElementById('login-password');
+    if(input.value === ADMIN_PASSWORD){
+      if(!supabaseClient){
+        showSupabaseNotConfigured();
+        return;
+      }
+      document.getElementById('login-overlay').style.display = 'none';
+      document.getElementById('app-content').style.display = 'block';
+      init();
+    } else {
+      document.getElementById('login-error').style.display = 'block';
+      input.value = '';
+      input.focus();
+    }
+  }
+
+  // ===================== CONFIG =====================
+  const SUPABASE_URL = 'https://vytljppuhcpnadjdkbmq.supabase.co';
+  const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ5dGxqcHB1aGNwbmFkamRrYm1xIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY3OTEzOTksImV4cCI6MjEwMjM2NzM5OX0.XBhOZH7vl5IUU4rmNrqeUUn0i9l69erZ73uRS5r3WQA';
+
+  let supabaseClient = null;
+  try {
+    if(SUPABASE_URL && SUPABASE_URL !== 'YOUR_SUPABASE_URL' && SUPABASE_KEY && SUPABASE_KEY !== 'YOUR_SUPABASE_ANON_KEY'){
+      supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    }
+  } catch(e){
+    console.error('فشل الاتصال بـ Supabase:', e);
+    supabaseClient = null;
+  }
+
+  function showSupabaseNotConfigured(){
+    document.getElementById('login-error').style.display = 'none';
+    const box = document.getElementById('login-error');
+    box.style.display = 'block';
+    box.style.color = 'var(--pending)';
+    box.innerHTML = t('supabaseNotConfigured');
+  }
+
+  // ===================== INIT =====================
+  async function init(){
+    await loadClients();
+
+    // اضبط الشهر الحالي في النموذج
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    document.getElementById('report-month').value = `${year}-${month}`;
+
+    renderPlatformImageCards();
+    renderExistingContent();
+  }
+
+  // ===================== CLIENTS =====================
+  async function loadClients(){
+    try {
+      const { data, error } = await supabaseClient
+        .from('clients')
+        .select('*')
+        .order('name');
+
+      if(error) throw error;
+
+      allClients = data || [];
+    } catch(err) {
+      showAlert(t('loadClientsError') + err.message, 'error');
+    }
+  }
+
+  // ===================== CLIENT SEARCH (خانة البحث ثابتة، والنتائج تتمرجح جوه القائمة تحتها) =====================
+  function onClientSearchInput(){
+    const term = document.getElementById('client-search-input').value.trim().toLowerCase();
+    renderClientSearchResults(term);
+  }
+
+  function renderClientSearchResults(term){
+    const dropdown = document.getElementById('client-search-dropdown');
+    const matches = term
+      ? allClients.filter(c => (c.name || '').toLowerCase().includes(term))
+      : allClients;
+
+    if(matches.length === 0){
+      dropdown.innerHTML = `<div class="client-search-empty">${t('noClientsFound')}</div>`;
+    } else {
+      dropdown.innerHTML = matches.map(c =>
+        `<div class="client-search-item" onclick="pickClientFromSearch('${c.id}')">${escapeHtml(c.name)}</div>`
+      ).join('');
+    }
+    dropdown.classList.add('open');
+  }
+
+  function pickClientFromSearch(clientId){
+    const client = allClients.find(c => String(c.id) === String(clientId));
+    document.getElementById('client-search-input').value = client ? client.name : '';
+    document.getElementById('client-search-dropdown').classList.remove('open');
+    selectClient(clientId, client ? client.name : clientId);
+  }
+
+  // اقفل قائمة البحث لو ضغطت في أي مكان تاني في الصفحة
+  document.addEventListener('click', (e) => {
+    const wrap = document.getElementById('client-search-input');
+    if(!wrap) return;
+    if(!e.target.closest('.client-search-wrap')){
+      document.getElementById('client-search-dropdown').classList.remove('open');
+    }
+  });
+
+  function selectClient(clientId, clientName){
+    selectedClientId = clientId;
+
+    const status = document.getElementById('client-status');
+    status.classList.add('active');
+    status.innerHTML = `${t('selectedClientLabel')}<strong>${escapeHtml(clientName)}</strong> <br><span class="mono" style="font-size:11px;">${clientId}</span>`;
+
+    // اعرض الرابط
+    const linkBox = document.getElementById('client-link-box');
+    linkBox.classList.add('active');
+    updateClientLink();
+
+    // اعرض صورة العميل (أو أول حرف من الاسم لو مفيش صورة)
+    showClientAvatar(clientId, clientName);
+
+    onMonthChange();
+  }
+
+  // ===================== CLIENT AVATAR =====================
+  function showClientAvatar(clientId, clientName){
+    const box = document.getElementById('client-avatar-box');
+    box.classList.add('active');
+
+    const img = document.getElementById('client-avatar-img');
+    const letter = document.getElementById('client-avatar-letter');
+    const removeBtn = document.getElementById('client-avatar-remove-btn');
+
+    img.style.display = 'none';
+    img.src = '';
+    letter.style.display = '';
+    letter.textContent = (clientName || clientId || '?').charAt(0).toUpperCase();
+    if(removeBtn) removeBtn.style.display = 'none';
+
+    const client = allClients.find(c => String(c.id) === String(clientId));
+    if(client && client.avatar_url){
+      setClientAvatarImage(client.avatar_url);
+    }
+  }
+
+  function setClientAvatarImage(src){
+    const img = document.getElementById('client-avatar-img');
+    const letter = document.getElementById('client-avatar-letter');
+    const removeBtn = document.getElementById('client-avatar-remove-btn');
+    img.src = src;
+    img.style.display = 'block';
+    letter.style.display = 'none';
+    if(removeBtn) removeBtn.style.display = 'flex';
+  }
+
+  function clearClientAvatarImage(){
+    const img = document.getElementById('client-avatar-img');
+    const letter = document.getElementById('client-avatar-letter');
+    const removeBtn = document.getElementById('client-avatar-remove-btn');
+    img.src = '';
+    img.style.display = 'none';
+    letter.style.display = '';
+    if(removeBtn) removeBtn.style.display = 'none';
+  }
+
+  // بيحوّل أي صورة مرفوعة إلى مقاس مربع ثابت 1000×1000 (قص من النص + تصغير/تكبير) قبل الرفع
+  function resizeImageToSquare(file, size = 1000){
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = () => reject(new Error('تعذرت قراءة الملف'));
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onerror = () => reject(new Error('تعذر تحميل الصورة'));
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          canvas.width = size;
+          canvas.height = size;
+          const ctx = canvas.getContext('2d');
+
+          // قص مربع من نص الصورة (Cover) عشان النسبة تبقى صحيحة قبل التصغير لـ 1000×1000
+          const minSide = Math.min(img.width, img.height);
+          const sx = (img.width - minSide) / 2;
+          const sy = (img.height - minSide) / 2;
+          ctx.drawImage(img, sx, sy, minSide, minSide, 0, 0, size, size);
+
+          canvas.toBlob((blob) => {
+            if(blob) resolve(blob);
+            else reject(new Error('فشل تجهيز الصورة'));
+          }, 'image/jpeg', 0.92);
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  async function handleClientAvatarUpload(event){
+    const file = event.target.files && event.target.files[0];
+    if(!file || !selectedClientId) return;
+
+    try {
+      // جهّز الصورة بمقاس ثابت 1000×1000 قبل أي حاجة
+      const resizedBlob = await resizeImageToSquare(file, 1000);
+
+      // عرض فوري للصورة كمعاينة
+      setClientAvatarImage(URL.createObjectURL(resizedBlob));
+
+      // ارفع الصورة واحفظها بشكل دائم
+      if(!supabaseClient) return;
+      const path = `${selectedClientId}/avatar.jpg`;
+
+      const { error: uploadError } = await supabaseClient
+        .storage
+        .from('avatars')
+        .upload(path, resizedBlob, { upsert: true, cacheControl: '3600', contentType: 'image/jpeg' });
+
+      if(uploadError) throw uploadError;
+
+      const { data: publicUrlData } = supabaseClient
+        .storage
+        .from('avatars')
+        .getPublicUrl(path);
+
+      const publicUrl = publicUrlData && publicUrlData.publicUrl
+        ? `${publicUrlData.publicUrl}?t=${Date.now()}`
+        : null;
+
+      if(publicUrl){
+        const { error: updateError } = await supabaseClient
+          .from('clients')
+          .update({ avatar_url: publicUrl })
+          .eq('id', selectedClientId);
+
+        if(updateError) throw updateError;
+
+        // حدّث النسخة المحلية من بيانات العميل
+        const client = allClients.find(c => String(c.id) === String(selectedClientId));
+        if(client) client.avatar_url = publicUrl;
+
+        showAlert(t('avatarUploadSuccess'), 'success');
+      }
+    } catch(err) {
+      console.error('تعذر حفظ صورة العميل:', err);
+      showAlert(t('avatarUploadError') + err.message, 'error');
+    } finally {
+      // يسمح باختيار نفس الملف تاني لو حبينا نستبدله بنفسه
+      event.target.value = '';
+    }
+  }
+
+  async function removeClientAvatar(){
+    if(!selectedClientId) return;
+    clearClientAvatarImage();
+
+    try {
+      if(!supabaseClient) return;
+      await supabaseClient.storage.from('avatars').remove([`${selectedClientId}/avatar.jpg`]);
+
+      const { error: updateError } = await supabaseClient
+        .from('clients')
+        .update({ avatar_url: null })
+        .eq('id', selectedClientId);
+
+      if(updateError) throw updateError;
+
+      const client = allClients.find(c => String(c.id) === String(selectedClientId));
+      if(client) client.avatar_url = null;
+
+      showAlert(t('avatarRemoveSuccess'), 'success');
+    } catch(err) {
+      console.error('تعذر حذف صورة العميل:', err);
+      showAlert(t('avatarRemoveError') + err.message, 'error');
+    }
+  }
+
+  // اسم ملف صفحة العميل (غيّره هنا لو غيّرت اسم الملف)
+  const CLIENT_PAGE_FILENAME = 'client-page.html';
+
+  function updateClientLink(){
+    const dir = window.location.pathname.substring(0, window.location.pathname.lastIndexOf('/') + 1);
+    const url = `${window.location.origin}${dir}${CLIENT_PAGE_FILENAME}?client_id=${selectedClientId}`;
+    document.getElementById('client-link').value = url;
+  }
+
+  function copyClientLink(){
+    const input = document.getElementById('client-link');
+    input.select();
+    document.execCommand('copy');
+    showAlert(t('linkCopied'), 'success');
+  }
+
+  // ===================== MONTH CHANGE (يُستدعى عند اختيار عميل أو تغيير الشهر) =====================
+  function onMonthChange(){
+    loadExistingPlatformImages();
+    loadExistingContent();
+  }
+
+  function getPlatformLabel(platform){
+    return I18N[currentLang].platforms[platform] || platform;
+  }
+
+  // helper: يستخرج مسار الملف داخل الباكت من الرابط العام لو مفيش storage_path محفوظ
+  function derivePathFromPublicUrl(url){
+    if(!url) return null;
+    const marker = '/content-media/';
+    const idx = url.indexOf(marker);
+    if(idx === -1) return null;
+    try { return decodeURIComponent(url.substring(idx + marker.length)); }
+    catch(e){ return url.substring(idx + marker.length); }
+  }
+
+  // ===================== REPORT SPLIT & UPLOAD =====================
+  const SPLIT_PLATFORMS = ['facebook', 'instagram', 'tiktok', 'youtube'];
+  function splitPlatformLabels(){ return I18N[currentLang].platformsFull; }
+
+  let splitterDividers = [25, 50, 75]; // نسب مئوية لخطوط التقسيم (3 خطوط = 4 مناطق)
+  let splitterImg = null; // عنصر <img> المحمّل فعلياً بالأبعاد الطبيعية
+
+  function handleReportDragOver(e){
+    e.preventDefault();
+    document.getElementById('report-upload-area').classList.add('dragover');
+  }
+
+  function handleReportDragOut(){
+    document.getElementById('report-upload-area').classList.remove('dragover');
+  }
+
+  function handleReportDrop(e){
+    e.preventDefault();
+    document.getElementById('report-upload-area').classList.remove('dragover');
+    handleReportFileSelect({ target: { files: e.dataTransfer.files } });
+  }
+
+  function handleReportFileSelect(e){
+    const file = e.target.files[0];
+    if(!file) return;
+    reportImageFile = file;
+
+    const url = URL.createObjectURL(file);
+    const imgEl = document.getElementById('splitter-img');
+    imgEl.src = url;
+
+    imgEl.onload = () => {
+      splitterImg = imgEl;
+      splitterDividers = [25, 50, 75];
+      document.getElementById('report-splitter').style.display = 'block';
+      renderSplitterOverlay();
+    };
+  }
+
+  function renderSplitterOverlay(){
+    const wrap = document.getElementById('splitter-canvas-wrap');
+    // امسح أي عناصر قديمة (خطوط/ليبلات) قبل إعادة الرسم
+    wrap.querySelectorAll('.split-divider, .split-zone-label').forEach(el => el.remove());
+
+    const bounds = [0, ...splitterDividers, 100];
+
+    // ارسم ليبل لكل منطقة في نص ارتفاعها
+    for(let i = 0; i < SPLIT_PLATFORMS.length; i++){
+      const midPct = (bounds[i] + bounds[i+1]) / 2;
+      const label = document.createElement('div');
+      label.className = 'split-zone-label';
+      label.style.top = `${midPct}%`;
+      label.style.transform = 'translateY(-50%)';
+      label.textContent = splitPlatformLabels()[SPLIT_PLATFORMS[i]];
+      wrap.appendChild(label);
+    }
+
+    // ارسم الخطوط القابلة للسحب
+    splitterDividers.forEach((pct, index) => {
+      const divider = document.createElement('div');
+      divider.className = 'split-divider';
+      divider.dataset.index = index;
+      divider.style.top = `${pct}%`;
+      divider.addEventListener('pointerdown', startDividerDrag);
+      wrap.appendChild(divider);
+    });
+  }
+
+  function startDividerDrag(e){
+    e.preventDefault();
+    const index = Number(e.currentTarget.dataset.index);
+    const wrap = document.getElementById('splitter-canvas-wrap');
+
+    function onMove(ev){
+      const rect = wrap.getBoundingClientRect();
+      let pct = ((ev.clientY - rect.top) / rect.height) * 100;
+
+      // امنع الخط إنه يعدّي جيرانه (حافظ على مسافة 4% كحد أدنى)
+      const minBound = (index === 0 ? 2 : splitterDividers[index - 1] + 4);
+      const maxBound = (index === splitterDividers.length - 1 ? 98 : splitterDividers[index + 1] - 4);
+      pct = Math.max(minBound, Math.min(maxBound, pct));
+
+      splitterDividers[index] = pct;
+      renderSplitterOverlay();
+    }
+
+    function onUp(){
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+    }
+
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+  }
+
+  function cropZoneToBlob(img, startPct, endPct){
+    return new Promise((resolve, reject) => {
+      const naturalW = img.naturalWidth;
+      const naturalH = img.naturalHeight;
+      const sy = Math.round((startPct / 100) * naturalH);
+      const sh = Math.round(((endPct - startPct) / 100) * naturalH);
+
+      const canvas = document.createElement('canvas');
+      canvas.width = naturalW;
+      canvas.height = sh;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, sy, naturalW, sh, 0, 0, naturalW, sh);
+
+      canvas.toBlob(blob => {
+        if(blob) resolve(blob); else reject(new Error('فشل تحويل الصورة'));
+      }, 'image/jpeg', 0.92);
+    });
+  }
+
+  function removeReportImage(){
+    reportImageFile = null;
+    splitterImg = null;
+    document.getElementById('report-file-input').value = '';
+    document.getElementById('report-splitter').style.display = 'none';
+    document.getElementById('splitter-img').src = '';
+  }
+
+  async function splitAndUploadReport(){
+    if(!selectedClientId){
+      showAlert(t('chooseClientFirst'), 'error');
+      return;
+    }
+
+    const month = document.getElementById('report-month').value;
+    if(!month){
+      showAlert(t('chooseMonthFirst'), 'error');
+      return;
+    }
+
+    if(!reportImageFile || !splitterImg){
+      showAlert(t('uploadReportFirst'), 'error');
+      return;
+    }
+
+    const btn = document.getElementById('split-upload-btn');
+    btn.disabled = true;
+    btn.innerHTML = t('splitUploadButtonLoading');
+
+    try {
+      const bounds = [0, ...splitterDividers, 100];
+      const records = [];
+
+      for(let i = 0; i < SPLIT_PLATFORMS.length; i++){
+        const platform = SPLIT_PLATFORMS[i];
+        const blob = await cropZoneToBlob(splitterImg, bounds[i], bounds[i + 1]);
+
+        const path = `${selectedClientId}/reports/${month}/${platform}-${Date.now()}.jpg`;
+        const { error: uploadError } = await supabaseClient.storage
+          .from('content-media')
+          .upload(path, blob, { contentType: 'image/jpeg', upsert: true });
+
+        if(uploadError) throw uploadError;
+
+        const { data: publicUrl } = supabaseClient.storage
+          .from('content-media')
+          .getPublicUrl(path);
+
+        // الصورة المقسّمة بتتضاف كصورة جديدة بعد أي صور موجودة أصلاً لنفس المنصة (مش بتستبدلها)
+        const existingCount = (existingPlatformImages[platform] || []).length;
+
+        records.push({
+          client_id: selectedClientId,
+          month_key: month,
+          platform: platform,
+          image_url: publicUrl.publicUrl,
+          storage_path: path,
+          sort_order: existingCount + i,
+          updated_at: new Date().toISOString()
+        });
+      }
+
+      const { error } = await supabaseClient
+        .from('platform_reports')
+        .insert(records);
+
+      if(error) throw error;
+
+      showAlert(t('splitUploadSuccess'), 'success');
+      removeReportImage();
+      loadExistingPlatformImages();
+
+    } catch(err) {
+      showAlert(t('genericError') + err.message, 'error');
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = t('splitUploadButton');
+    }
+  }
+
+  // ===================== PER-PLATFORM MULTI IMAGE (OPTIONAL) =====================
+  let platformImageFiles = {};     // platform -> [File, ...] (لسه ماترفعتش)
+  let existingPlatformImages = {}; // platform -> [{id, image_url, storage_path, sort_order}, ...] (من القاعدة)
+
+  function renderPlatformImageCards(){
+    const wrap = document.getElementById('platform-image-cards');
+    wrap.innerHTML = PLATFORMS.map(p => {
+      const pending = platformImageFiles[p] || [];
+      const existing = existingPlatformImages[p] || [];
+
+      const existingThumbs = existing.map(img => `
+        <div class="mini-thumb" data-lightbox-url="${img.image_url}" data-lightbox-type="image">
+          <img src="${img.image_url}" alt="">
+          <button type="button" class="mini-thumb-remove" onclick="event.stopPropagation(); removeExistingPlatformImage('${p}', '${img.id}')">✕</button>
+        </div>
+      `).join('');
+
+      const pendingThumbs = pending.map((file, idx) => `
+        <div class="mini-thumb pending">
+          <img src="${URL.createObjectURL(file)}" alt="">
+          <button type="button" class="mini-thumb-remove" onclick="removePendingPlatformImage('${p}', ${idx})">✕</button>
+        </div>
+      `).join('');
+
+      const grid = (existingThumbs + pendingThumbs) ||
+        `<div class="empty-note" style="grid-column:1/-1; padding:4px 0;">${t('noImagesYet')}</div>`;
+
+      return `
+        <div class="platform-image-card">
+          <div class="platform-image-card-head">${platformLabelsFull()[p]}</div>
+          <div class="platform-image-multi-grid">${grid}</div>
+          <label class="upload-area" style="cursor:pointer; margin-top:10px; padding:16px 10px;">
+            <div class="upload-area-icon" style="font-size:20px; margin-bottom:6px;">📤</div>
+            <div class="upload-area-text" style="font-size:11.5px;">${t('addImageHint')}</div>
+            <input type="file" accept="image/*" multiple style="display:none" onchange="onPlatformImageSelect('${p}', event)">
+          </label>
+          ${pending.length ? `<button class="btn btn-primary" style="width:100%; margin-top:8px; font-size:12px; padding:9px;" onclick="uploadPendingPlatformImages('${p}')">${t('uploadNImages').replace('{n}', pending.length)}</button>` : ''}
+        </div>
+      `;
+    }).join('');
+  }
+
+  function onPlatformImageSelect(platform, e){
+    const files = Array.from(e.target.files || []);
+    if(files.length === 0) return;
+    if(!platformImageFiles[platform]) platformImageFiles[platform] = [];
+    platformImageFiles[platform].push(...files);
+    e.target.value = '';
+    renderPlatformImageCards();
+  }
+
+  function removePendingPlatformImage(platform, idx){
+    if(platformImageFiles[platform]){
+      platformImageFiles[platform].splice(idx, 1);
+      renderPlatformImageCards();
+    }
+  }
+
+  async function removeExistingPlatformImage(platform, id){
+    const list = existingPlatformImages[platform] || [];
+    const item = list.find(i => String(i.id) === String(id));
+    if(!item){ showAlert(t('itemNotFoundError'), 'error'); return; }
+
+    let confirmed = true;
+    try { confirmed = confirm(t('confirmDeletePlatformImage').replace('{platform}', platformLabelsFull()[platform])); }
+    catch(e){ confirmed = true; }
+    if(!confirmed) return;
+
+    try {
+      const path = item.storage_path || derivePathFromPublicUrl(item.image_url);
+      if(path){
+        await supabaseClient.storage.from('content-media').remove([path]);
+      }
+      const { error } = await supabaseClient
+        .from('platform_reports')
+        .delete()
+        .eq('id', item.id);
+      if(error) throw error;
+
+      existingPlatformImages[platform] = list.filter(i => String(i.id) !== String(id));
+      renderPlatformImageCards();
+      showAlert(t('deletePlatformImageSuccess').replace('{platform}', platformLabelsFull()[platform]), 'success');
+    } catch(err) {
+      showAlert(t('deleteError') + err.message, 'error');
+    }
+  }
+
+  async function uploadPendingPlatformImages(platform){
+    if(!selectedClientId){ showAlert(t('chooseClientFirst'), 'error'); return; }
+    const month = document.getElementById('report-month').value;
+    if(!month){ showAlert(t('chooseMonthFirst'), 'error'); return; }
+    const files = platformImageFiles[platform] || [];
+    if(files.length === 0) return;
+
+    try {
+      const existing = existingPlatformImages[platform] || [];
+      let nextOrder = existing.length
+        ? Math.max(...existing.map(i => i.sort_order || 0)) + 1
+        : 0;
+
+      const uploadedRecords = [];
+      for(const file of files){
+        const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
+        const path = `${selectedClientId}/reports/${month}/${platform}-${Date.now()}-${Math.random().toString(36).slice(2,8)}.${ext}`;
+
+        const { error: uploadError } = await supabaseClient.storage
+          .from('content-media')
+          .upload(path, file, { contentType: file.type || 'image/jpeg', upsert: true });
+        if(uploadError) throw uploadError;
+
+        const { data: publicUrl } = supabaseClient.storage.from('content-media').getPublicUrl(path);
+
+        uploadedRecords.push({
+          client_id: selectedClientId,
+          month_key: month,
+          platform: platform,
+          image_url: publicUrl.publicUrl,
+          storage_path: path,
+          sort_order: nextOrder,
+          updated_at: new Date().toISOString()
+        });
+        nextOrder++;
+      }
+
+      const { data: inserted, error } = await supabaseClient
+        .from('platform_reports')
+        .insert(uploadedRecords)
+        .select();
+      if(error) throw error;
+
+      if(!existingPlatformImages[platform]) existingPlatformImages[platform] = [];
+      existingPlatformImages[platform].push(...(inserted || []));
+      platformImageFiles[platform] = [];
+      renderPlatformImageCards();
+      showAlert(`✅ ${platformLabelsFull()[platform]} ${currentLang === 'ar' ? 'اترفعت بنجاح! هيشوفها العميل فوراً.' : 'uploaded successfully! The client will see it right away.'}`, 'success');
+    } catch(err) {
+      showAlert(t('uploadError') + err.message, 'error');
+    }
+  }
+
+  async function loadExistingPlatformImages(){
+    existingPlatformImages = {};
+    platformImageFiles = {};
+    if(!selectedClientId){ renderPlatformImageCards(); return; }
+    const month = document.getElementById('report-month').value;
+    if(!month){ renderPlatformImageCards(); return; }
+
+    try {
+      const { data, error } = await supabaseClient
+        .from('platform_reports')
+        .select('id, platform, image_url, storage_path, sort_order')
+        .eq('client_id', selectedClientId)
+        .eq('month_key', month)
+        .order('sort_order', { ascending: true });
+      if(error) throw error;
+
+      (data || []).forEach(r => {
+        if(!existingPlatformImages[r.platform]) existingPlatformImages[r.platform] = [];
+        existingPlatformImages[r.platform].push(r);
+      });
+    } catch(err) {
+      console.error('تعذر تحميل صور المنصات:', err);
+    }
+    renderPlatformImageCards();
+  }
+
+  // ===================== CONTENT (POSTS/VIDEOS) MULTI UPLOAD =====================
+  let currentContentPlatform = 'facebook';
+  let pendingContentFiles = []; // { id, file, url, type }
+  let existingContent = [];     // صفوف من جدول content للمنصة/الشهر الحاليين
+
+  document.addEventListener('click', (e) => {
+    const tab = e.target.closest('#content-platform-tabs .platform-tab');
+    if(tab){
+      currentContentPlatform = tab.dataset.platform;
+      document.querySelectorAll('#content-platform-tabs .platform-tab').forEach(t => {
+        t.classList.toggle('active', t === tab);
+      });
+      loadExistingContent();
+    }
+  });
+
+  function handleContentDragOver(e){
+    e.preventDefault();
+    document.getElementById('content-upload-area').classList.add('dragover');
+  }
+
+  function handleContentDragOut(){
+    document.getElementById('content-upload-area').classList.remove('dragover');
+  }
+
+  function handleContentDrop(e){
+    e.preventDefault();
+    document.getElementById('content-upload-area').classList.remove('dragover');
+    handleContentFileSelect({ target: { files: e.dataTransfer.files } });
+  }
+
+  function handleContentFileSelect(e){
+    const files = Array.from(e.target.files || []);
+    files.forEach(file => {
+      const type = file.type.startsWith('video') ? 'video' : 'image';
+      pendingContentFiles.push({
+        id: 'p' + Date.now() + Math.random().toString(36).slice(2),
+        file, type,
+        url: URL.createObjectURL(file)
+      });
+    });
+    document.getElementById('content-file-input').value = '';
+    renderPendingContentPreview();
+  }
+
+  function renderPendingContentPreview(){
+    const wrap = document.getElementById('content-pending-preview');
+    const btn = document.getElementById('content-upload-btn');
+
+    wrap.innerHTML = pendingContentFiles.map(p => `
+      <div class="file-card">
+        <div class="file-card-thumb" data-lightbox-url="${p.url}" data-lightbox-type="${p.type}" style="cursor:zoom-in;">
+          ${p.type === 'video' ? `<video src="${p.url}" muted></video>` : `<img src="${p.url}">`}
+        </div>
+        <div class="file-card-name" style="cursor:default;">${escapeHtml(p.file.name)}</div>
+        <button class="file-card-remove" onclick="removePendingContent('${p.id}')">✕</button>
+      </div>
+    `).join('');
+
+    btn.style.display = pendingContentFiles.length ? 'block' : 'none';
+  }
+
+  function removePendingContent(id){
+    pendingContentFiles = pendingContentFiles.filter(p => p.id !== id);
+    renderPendingContentPreview();
+  }
+
+  async function uploadPendingContent(){
+    if(!selectedClientId){ showAlert(t('chooseClientFirst'), 'error'); return; }
+    const month = document.getElementById('report-month').value;
+    if(!month){ showAlert(t('chooseMonthFirst'), 'error'); return; }
+    if(pendingContentFiles.length === 0) return;
+
+    const btn = document.getElementById('content-upload-btn');
+    btn.disabled = true;
+    btn.innerHTML = t('uploadSelectedButtonLoading');
+
+    let successCount = 0;
+    try {
+      for(const p of pendingContentFiles){
+        const ext = (p.file.name.split('.').pop() || (p.type === 'video' ? 'mp4' : 'jpg')).toLowerCase();
+        const path = `${selectedClientId}/content/${month}/${currentContentPlatform}-${Date.now()}-${Math.random().toString(36).slice(2,7)}.${ext}`;
+
+        const { error: upErr } = await supabaseClient.storage
+          .from('content-media')
+          .upload(path, p.file, { contentType: p.file.type || undefined, upsert: true });
+        if(upErr) throw upErr;
+
+        const { data: pub } = supabaseClient.storage.from('content-media').getPublicUrl(path);
+
+        const { error } = await supabaseClient.from('content').insert([{
+          client_id: selectedClientId,
+          month_key: month,
+          platform: currentContentPlatform,
+          media_url: pub.publicUrl,
+          media_type: p.type,
+          storage_path: path,
+          caption: ''
+        }]);
+        if(error) throw error;
+        successCount++;
+      }
+
+      showAlert(t('uploadSuccessGeneric').replace('{n}', successCount), 'success');
+      pendingContentFiles = [];
+      renderPendingContentPreview();
+      loadExistingContent();
+    } catch(err) {
+      showAlert(t('uploadPartialError').replace('{done}', successCount).replace('{total}', pendingContentFiles.length) + err.message, 'error');
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = t('uploadSelectedButton');
+    }
+  }
+
+  async function loadExistingContent(){
+    if(!selectedClientId || !document.getElementById('report-month').value){
+      existingContent = [];
+      renderExistingContent();
+      return;
+    }
+    const month = document.getElementById('report-month').value;
+
+    try {
+      const { data, error } = await supabaseClient
+        .from('content')
+        .select('*')
+        .eq('client_id', selectedClientId)
+        .eq('month_key', month)
+        .eq('platform', currentContentPlatform)
+        .order('created_at', { ascending: false });
+      if(error) throw error;
+
+      existingContent = data || [];
+    } catch(err) {
+      console.error('تعذر تحميل الملفات المرفوعة:', err);
+      existingContent = [];
+    }
+    renderExistingContent();
+  }
+
+  function renderExistingContent(){
+    const list = document.getElementById('content-existing-list');
+    if(!selectedClientId){
+      list.innerHTML = `<div class="empty-note">${t('noClientChosenEmpty')}</div>`;
+      return;
+    }
+    if(existingContent.length === 0){
+      list.innerHTML = `<div class="empty-note">${t('noFilesUploadedForPlatform')}</div>`;
+      return;
+    }
+
+    list.innerHTML = existingContent.map(c => `
+      <div class="file-card">
+        <div class="file-card-thumb" data-lightbox-url="${c.media_url}" data-lightbox-type="${c.media_type}" style="cursor:zoom-in;">
+          ${c.media_type === 'video' ? `<video src="${c.media_url}" muted></video>` : `<img src="${c.media_url}">`}
+        </div>
+        <label class="file-card-name" style="color:var(--pink); font-weight:600;">
+          ${t('replaceLabel')}
+          <input type="file" accept="${c.media_type === 'video' ? 'video/*' : 'image/*'}" style="display:none" onchange="replaceContentItem('${c.id}', event)">
+        </label>
+        <button class="file-card-remove" onclick="deleteContentItem('${c.id}')">✕</button>
+      </div>
+    `).join('');
+  }
+
+  async function deleteContentItem(id){
+    const item = existingContent.find(c => String(c.id) === String(id));
+    if(!item){ showAlert(t('itemNotFoundError'), 'error'); return; }
+
+    let confirmed = true;
+    try { confirmed = confirm(t('confirmDeleteFile')); }
+    catch(e){ confirmed = true; } // لو الـ confirm() اتمنع (مثلاً داخل iframe)، كمّل من غير ما توقف الحذف
+
+    if(!confirmed) return;
+
+    try {
+      const path = item.storage_path || derivePathFromPublicUrl(item.media_url);
+      if(path){
+        await supabaseClient.storage.from('content-media').remove([path]);
+      }
+      const { error } = await supabaseClient.from('content').delete().eq('id', item.id);
+      if(error) throw error;
+
+      existingContent = existingContent.filter(c => String(c.id) !== String(id));
+      renderExistingContent();
+      showAlert(t('deletedSuccess'), 'success');
+    } catch(err) {
+      showAlert(t('deleteError') + err.message, 'error');
+    }
+  }
+
+  async function replaceContentItem(id, e){
+    const file = e.target.files[0];
+    if(!file) return;
+    const item = existingContent.find(c => String(c.id) === String(id));
+    if(!item){ showAlert(t('itemNotFoundError'), 'error'); return; }
+
+    try {
+      const oldPath = item.storage_path || derivePathFromPublicUrl(item.media_url);
+      const type = file.type.startsWith('video') ? 'video' : 'image';
+      const ext = (file.name.split('.').pop() || (type === 'video' ? 'mp4' : 'jpg')).toLowerCase();
+      const newPath = `${selectedClientId}/content/${item.month_key}/${item.platform}-${Date.now()}.${ext}`;
+
+      const { error: upErr } = await supabaseClient.storage
+        .from('content-media')
+        .upload(newPath, file, { contentType: file.type || undefined, upsert: true });
+      if(upErr) throw upErr;
+
+      const { data: pub } = supabaseClient.storage.from('content-media').getPublicUrl(newPath);
+
+      const { error } = await supabaseClient
+        .from('content')
+        .update({ media_url: pub.publicUrl, media_type: type, storage_path: newPath })
+        .eq('id', item.id);
+      if(error) throw error;
+
+      if(oldPath && oldPath !== newPath){
+        await supabaseClient.storage.from('content-media').remove([oldPath]);
+      }
+
+      showAlert(t('replaceSuccess'), 'success');
+      loadExistingContent();
+    } catch(err) {
+      showAlert(t('replaceError') + err.message, 'error');
+    }
+  }
+
+  // ===================== LIGHTBOX =====================
+  document.addEventListener('click', (e) => {
+    const trigger = e.target.closest('[data-lightbox-url]');
+    if(trigger){
+      openLightbox(trigger.dataset.lightboxUrl, trigger.dataset.lightboxType || 'image');
+    }
+  });
+
+  function openLightbox(url, type){
+    const imgEl = document.getElementById('lightbox-img');
+    const vidEl = document.getElementById('lightbox-video');
+    if(type === 'video'){
+      imgEl.style.display = 'none';
+      imgEl.src = '';
+      vidEl.style.display = 'block';
+      vidEl.src = url;
+      vidEl.play().catch(() => {});
+    } else {
+      vidEl.pause();
+      vidEl.style.display = 'none';
+      vidEl.src = '';
+      imgEl.style.display = 'block';
+      imgEl.src = url;
+    }
+    document.getElementById('lightbox').classList.add('active');
+  }
+
+  function closeLightbox(){
+    document.getElementById('lightbox').classList.remove('active');
+    const vidEl = document.getElementById('lightbox-video');
+    vidEl.pause();
+    vidEl.src = '';
+  }
+
+  // ===================== UTILITIES =====================
+  function showAlert(message, type = 'info'){
+    const container = document.getElementById('alerts-container');
+    const alert = document.createElement('div');
+    alert.className = `alert alert-${type}`;
+    alert.innerHTML = `
+      <span>${message}</span>
+      <button class="alert-close" onclick="this.parentElement.remove()">✕</button>
+    `;
+    container.insertBefore(alert, container.firstChild);
+
+    setTimeout(() => alert.remove(), 5000);
+  }
+
+  function escapeHtml(text){
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  }
+
+  // ===================== STARTUP =====================
+  // بيلقط أي خطأ برمجي كان بيحصل بصمت من غير ما المستخدم يشوف حاجة (زي أزرار مش شغالة من غير أي رسالة)
+  window.addEventListener('error', function(e){
+    try { showAlert(t('unexpectedError') + (e.message || e.error || 'unknown'), 'error'); } catch(_){}
+  });
+  window.addEventListener('unhandledrejection', function(e){
+    const msg = (e.reason && e.reason.message) ? e.reason.message : e.reason;
+    try { showAlert(t('unexpectedError') + msg, 'error'); } catch(_){}
+  });
+
+  // init() يُستدعى بعد إدخال كلمة المرور بنجاح (انظر checkPassword)
+  applyStaticTranslations();
+  document.getElementById('login-password').focus();
+  if(!supabaseClient){
+    showSupabaseNotConfigured();
+  }
+</script>
+
+</body>
+</html>
